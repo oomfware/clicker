@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			:root {
+				--text: #1a1a1a;
+				--muted: #888;
+				--border: #ddd;
+				--surface: #f5f5f5;
+				--hover: #f0f0f0;
+				--focus: #3b82f6;
+				--danger: #ef4444;
+				--radius: 4px;
+
+				font-family: system-ui, sans-serif;
+				font-size: 14px;
+				line-height: 1.4;
+				color: var(--text);
+				background: #fff;
+			}
+			* {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				width: 320px;
+				padding: 14px;
+				display: flex;
+				flex-direction: column;
+				gap: 14px;
+				font: inherit;
+				color: inherit;
+				background: inherit;
+			}
+
+			/* --- shared resets --- */
+
+			button,
+			input,
+			dialog {
+				font: inherit;
+				color: inherit;
+			}
+
+			/* --- buttons --- */
+
+			button {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				padding: 6px 12px;
+				border: 1px solid var(--border);
+				border-radius: var(--radius);
+				background: #fff;
+				cursor: pointer;
+			}
+			button:hover {
+				background: var(--surface);
+			}
+			button:disabled {
+				opacity: 0.4;
+				cursor: default;
+			}
+			button.primary {
+				background: var(--text);
+				color: #fff;
+				border-color: var(--text);
+			}
+			button.primary:hover {
+				background: #333;
+			}
+
+			/* --- inputs --- */
+
+			input[type='text'] {
+				width: 100%;
+				padding: 8px 10px;
+				border: 1px solid var(--border);
+				border-radius: var(--radius);
+				outline: none;
+			}
+			input[type='text']:focus {
+				border-color: var(--focus);
+			}
+			input[type='text'].conflict {
+				border-color: var(--danger);
+			}
+
+			/* --- dialog --- */
+
+			dialog {
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				padding: 14px;
+				width: 280px;
+				margin: auto;
+			}
+			dialog::backdrop {
+				background: rgba(0, 0, 0, 0.25);
+			}
+			.dialog-title {
+				font-weight: 600;
+				margin-bottom: 10px;
+			}
+			.dialog-input {
+				margin-bottom: 10px;
+			}
+			.dialog-actions {
+				display: flex;
+				justify-content: flex-end;
+				gap: 6px;
+			}
+
+			/* --- layout --- */
+
+			.header {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.header h1 {
+				font-size: 1rem;
+				font-weight: 600;
+				letter-spacing: 0.01em;
+			}
+			.status {
+				display: inline-block;
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+				background: #ccc;
+			}
+			.status.connected {
+				background: #22c55e;
+			}
+			.label {
+				font-size: 13px;
+				font-weight: 500;
+				color: var(--muted);
+				margin-bottom: 6px;
+			}
+			.error-warning {
+				display: none;
+				color: var(--danger);
+				font-size: 13px;
+				margin-top: 6px;
+			}
+			.error-warning.visible {
+				display: block;
+			}
+			.workspaces {
+				list-style: none;
+			}
+			.workspaces li {
+				padding: 8px 10px;
+				border-radius: var(--radius);
+				margin-bottom: 6px;
+				background: var(--surface);
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.color-dot {
+				width: 10px;
+				height: 10px;
+				border-radius: 50%;
+				flex-shrink: 0;
+			}
+			.tab-count {
+				color: var(--muted);
+				margin-left: auto;
+				font-size: 13px;
+			}
+			.workspace-section {
+				display: flex;
+				flex-direction: column;
+			}
+			.workspace-section button {
+				margin-top: 10px;
+				align-self: stretch;
+			}
+			.empty {
+				color: var(--muted);
+				font-style: italic;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="header">
+			<span id="status" class="status"></span>
+			<h1>clicker</h1>
+		</div>
+		<div>
+			<div class="label">Browser name</div>
+			<input id="name-input" type="text" spellcheck="false" />
+			<div id="error-warning" class="error-warning"></div>
+		</div>
+		<div class="workspace-section">
+			<div class="label">Workspaces</div>
+			<div id="content">
+				<p class="empty">Loading...</p>
+			</div>
+			<button id="create-btn" disabled>Create workspace from this tab</button>
+		</div>
+		<dialog id="create-dialog">
+			<form method="dialog">
+				<div class="dialog-title">Create workspace</div>
+				<input
+					id="dialog-name"
+					class="dialog-input"
+					type="text"
+					placeholder="workspace name"
+					required
+					spellcheck="false"
+				/>
+				<div class="dialog-actions">
+					<button type="button" id="dialog-cancel">Cancel</button>
+					<button class="primary" type="submit" value="submit">Create</button>
+				</div>
+			</form>
+		</dialog>
+		<script src="./main.ts" type="module"></script>
+	</body>
+</html>

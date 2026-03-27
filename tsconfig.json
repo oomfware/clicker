@@ -1,0 +1,4 @@
+{
+	"references": [{ "path": "apps/mcp" }, { "path": "apps/extension" }, { "path": "packages/protocol" }],
+	"files": []
+}

@@ -1,0 +1,25 @@
+{
+	"name": "@oomfware/clicker-extension",
+	"version": "0.0.0",
+	"private": true,
+	"description": "browser extension for clicker",
+	"type": "module",
+	"scripts": {
+		"dev": "wxt",
+		"dev:firefox": "wxt -b firefox",
+		"build": "wxt build",
+		"build:firefox": "wxt build -b firefox",
+		"zip": "wxt zip",
+		"zip:firefox": "wxt zip -b firefox",
+		"postinstall": "wxt prepare"
+	},
+	"dependencies": {
+		"@oomfware/clicker-protocol": "workspace:*",
+		"valibot": "^1.3.1"
+	},
+	"devDependencies": {
+		"@types/chrome": "^0.1.38",
+		"typescript": "^6.0.2",
+		"wxt": "^0.20.20"
+	}
+}

@@ -1,0 +1,25 @@
+{
+	"name": "@oomfware/clicker-mcp",
+	"version": "0.0.0",
+	"private": true,
+	"bin": "./dist/index.mjs",
+	"type": "module",
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@optique/core": "^0.10.7",
+		"@optique/run": "^0.10.7",
+		"ws": "^8.18.0",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@oomfware/clicker-protocol": "workspace:*",
+		"@types/node": "^25.0.0",
+		"@types/ws": "^8.18.0",
+		"tsdown": "^0.21.7",
+		"typescript": "^6.0.2"
+	}
+}
