@@ -12,13 +12,13 @@
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@optique/core": "^0.10.7",
 		"@optique/run": "^0.10.7",
-		"ws": "^8.18.0",
+		"ws": "^8.20.0",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@oomfware/clicker-protocol": "workspace:*",
-		"@types/node": "^25.0.0",
-		"@types/ws": "^8.18.0",
+		"@types/node": "^25.5.2",
+		"@types/ws": "^8.18.1",
 		"tsdown": "^0.21.7",
 		"typescript": "^6.0.2"
 	}
