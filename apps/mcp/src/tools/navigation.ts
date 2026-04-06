@@ -275,6 +275,35 @@ export const registerNavigationTools = (
 	});
 
 	server.registerTool(
+		'navigation_history',
+		{
+			description: 'Show the back/forward navigation history for the active tab.',
+			annotations: { readOnlyHint: true },
+		},
+		async () => {
+			if (!session.isConnected) return notConnectedError();
+
+			// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+			const history = (await sendCdpCommand(relay, session, 'Page.getNavigationHistory', {})) as {
+				currentIndex: number;
+				entries: { url: string; title: string; transitionType: string }[];
+			};
+
+			const { currentIndex, entries } = history;
+			const forward = entries.length - currentIndex - 1;
+			const header = `Navigation history: ${entries.length} entries | current: ${currentIndex} | back: ${currentIndex} | forward: ${forward}`;
+
+			const lines = entries.map((entry, i) => {
+				const marker = i === currentIndex ? '> ' : '  ';
+				const title = entry.title ? ` — ${entry.title}` : '';
+				return `${marker}[${i}] ${entry.transitionType} ${entry.url}${title}`;
+			});
+
+			return { content: [{ type: 'text', text: `${header}\n${lines.join('\n')}` }] };
+		},
+	);
+
+	server.registerTool(
 		'list_tabs',
 		{
 			description:
