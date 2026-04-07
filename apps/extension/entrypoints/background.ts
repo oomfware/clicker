@@ -182,6 +182,27 @@ export default defineBackground(async () => {
 				} else if (currentWorkspace && newWorkspace && currentWorkspace !== newWorkspace) {
 					await notifyTabRemoved(tabId);
 					await notifyTabAdopted(newWorkspace, tabId);
+				} else if (!currentWorkspace && !newWorkspace && groupId >= 0) {
+					// fallback: the group isn't tracked but might be a clicker group
+					// whose adoption failed (e.g. exception during group-updated).
+					// query Chrome for the real title and retry adoption.
+					try {
+						const group = await chrome.tabGroups.get(groupId);
+						const name = parseGroupTitle(group.title ?? '');
+						if (name) {
+							const color = resolveTabGroupColor(group.color);
+							const workspace = await workspaces.adoptGroup(groupId, name, color);
+							if (workspace) {
+								markDirty();
+								connection.send({ type: 'workspace:created', result: { ok: true, workspace } });
+								void debuggerBridge.attachAll(workspace.tabs.map((t) => t.tabId)).catch((err) => {
+									console.warn('failed to attach debugger to adopted workspace tabs:', err);
+								});
+							}
+						}
+					} catch {
+						// group doesn't exist
+					}
 				}
 				break;
 			}
