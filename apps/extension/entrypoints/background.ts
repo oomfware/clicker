@@ -211,7 +211,22 @@ export default defineBackground(async () => {
 						});
 					}
 				} else if (!name && isTracked) {
-					notifyWorkspaceDisowned(groupId);
+					// verify against Chrome's current state; during workspace creation,
+					// chrome.tabs.group() may fire onUpdated with an empty title before
+					// chrome.tabGroups.update() sets the clicker prefix, but by the time
+					// this handler runs the real title is already applied
+					let confirmed = true;
+					try {
+						const group = await chrome.tabGroups.get(groupId);
+						if (parseGroupTitle(group.title ?? '')) {
+							confirmed = false;
+						}
+					} catch {
+						// group already removed — proceed with disown
+					}
+					if (confirmed) {
+						notifyWorkspaceDisowned(groupId);
+					}
 				} else if (name && isTracked) {
 					const workspaceId = workspaces.findByGroupId(groupId);
 					workspaces.updateGroup(groupId, name, color);
