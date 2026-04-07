@@ -223,7 +223,12 @@ export class WorkspaceManager {
 
 		if (this.#tabToWorkspace.has(tab.id)) return false;
 
-		await chrome.tabs.group({ tabIds: [tab.id], groupId: entry.groupId });
+		// only group the tab if it's not already in the correct group
+		// (e.g. when the user drags a tab into a clicker group, Chrome has
+		// already moved it before the onUpdated event fires)
+		if (tab.groupId !== entry.groupId) {
+			await chrome.tabs.group({ tabIds: [tab.id], groupId: entry.groupId });
+		}
 
 		entry.workspace.tabs.push(toWorkspaceTab(tab));
 		this.#tabToWorkspace.set(tab.id, workspaceId);
