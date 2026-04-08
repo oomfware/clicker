@@ -9,6 +9,21 @@ import { startTabTracker, type TabIntent } from '../lib/tab-tracker.ts';
 import { WorkspaceManager, parseGroupTitle, resolveTabGroupColor } from '../lib/workspace-manager.ts';
 
 export default defineBackground(async () => {
+	// register onConnect before any async work so the listener is captured
+	// in the service worker's first turn of the event loop — connections
+	// that wake the worker during async init would otherwise be dropped
+	const popupPorts = new Set<chrome.runtime.Port>();
+	let ready = false;
+
+	chrome.runtime.onConnect.addListener((port) => {
+		if (port.name !== POPUP_PORT_NAME) return;
+		popupPorts.add(port);
+		port.onDisconnect.addListener(() => popupPorts.delete(port));
+		if (ready) {
+			pushPopupState();
+		}
+	});
+
 	const workspaces = new WorkspaceManager();
 	await workspaces.discover();
 
@@ -26,8 +41,6 @@ export default defineBackground(async () => {
 
 	// #region popup state push
 
-	const popupPorts = new Set<chrome.runtime.Port>();
-
 	const pushPopupState = () => {
 		if (popupPorts.size === 0) return;
 		const s: PopupState = {
@@ -40,13 +53,6 @@ export default defineBackground(async () => {
 			port.postMessage(s);
 		}
 	};
-
-	chrome.runtime.onConnect.addListener((port) => {
-		if (port.name !== POPUP_PORT_NAME) return;
-		popupPorts.add(port);
-		port.onDisconnect.addListener(() => popupPorts.delete(port));
-		pushPopupState();
-	});
 
 	// #endregion
 
@@ -325,6 +331,9 @@ export default defineBackground(async () => {
 
 	updateBadge();
 	connection.start();
+
+	ready = true;
+	pushPopupState();
 
 	// #region popup message handler
 
