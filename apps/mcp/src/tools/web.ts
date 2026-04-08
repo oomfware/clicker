@@ -146,7 +146,32 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 			if (domain) params.domain = domain;
 			if (path) params.path = path;
 
+			// delete without partition key (handles unpartitioned cookies)
 			await sendCdpCommand(relay, session, 'Network.deleteCookies', params);
+
+			// also delete with a derived partition key to handle Chrome's
+			// cookie partitioning — without this, cookies stored in a
+			// partition silently survive the first delete
+			let topLevelSite: string | undefined;
+			if (url) {
+				try {
+					const u = new URL(url);
+					topLevelSite = `${u.protocol}//${u.hostname}`;
+				} catch {
+					// invalid URL — skip partitioned delete
+				}
+			} else if (domain) {
+				const host = domain.startsWith('.') ? domain.slice(1) : domain;
+				topLevelSite = `https://${host}`;
+			}
+
+			if (topLevelSite) {
+				await sendCdpCommand(relay, session, 'Network.deleteCookies', {
+					...params,
+					partitionKey: { topLevelSite, hasCrossSiteAncestor: false },
+				});
+			}
+
 			return { content: [{ type: 'text', text: `Cookie "${name}" deleted.` }] };
 		},
 	);
