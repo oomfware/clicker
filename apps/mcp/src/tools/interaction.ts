@@ -9,6 +9,7 @@ import {
 	CDP_MODIFIER_CTRL,
 	CDP_MODIFIER_META,
 	dispatchClick,
+	dispatchDrag,
 	includeSnapshotSchema,
 	maybeSnapshot,
 	notConnectedError,
@@ -583,66 +584,7 @@ export const registerInteractionTools = (
 			}
 
 			const frameId = from.frameId;
-			await sendCdpCommand(
-				relay,
-				session,
-				'Input.dispatchMouseEvent',
-				{
-					type: 'mouseMoved',
-					x: from.x,
-					y: from.y,
-				},
-				{ frameId },
-			);
-			await sendCdpCommand(
-				relay,
-				session,
-				'Input.dispatchMouseEvent',
-				{
-					type: 'mousePressed',
-					x: from.x,
-					y: from.y,
-					button: 'left',
-					buttons: 1,
-				},
-				{ frameId },
-			);
-
-			const steps = 10;
-			for (let i = 1; i <= steps; i++) {
-				const t = i / steps;
-				const x = Math.round(from.x + (to.x - from.x) * t);
-				const y = Math.round(from.y + (to.y - from.y) * t);
-				// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
-				await sendCdpCommand(
-					relay,
-					session,
-					'Input.dispatchMouseEvent',
-					{
-						type: 'mouseMoved',
-						x,
-						y,
-						buttons: 1,
-					},
-					{ frameId },
-				);
-				// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
-				await new Promise((r) => setTimeout(r, 10));
-			}
-
-			await sendCdpCommand(
-				relay,
-				session,
-				'Input.dispatchMouseEvent',
-				{
-					type: 'mouseReleased',
-					x: to.x,
-					y: to.y,
-					button: 'left',
-					buttons: 0,
-				},
-				{ frameId },
-			);
+			await dispatchDrag(relay, session, from, to, 10, 10, frameId);
 
 			await waitForStabilization(relay, session);
 

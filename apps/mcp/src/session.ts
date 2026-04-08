@@ -81,6 +81,7 @@ export interface EmulationState {
 	height?: number;
 	deviceScaleFactor?: number;
 	mobile?: boolean;
+	touch?: boolean;
 }
 
 const MAX_CONSOLE_MESSAGES = 100;

@@ -1068,6 +1068,7 @@ export const registerStateTools = (
 					enabled: touch,
 					...(touch && { configuration: 'mobile' }),
 				});
+				session.mergeEmulationState({ touch });
 				actions.push(`touch ${touch ? 'enabled' : 'disabled'}`);
 			}
 

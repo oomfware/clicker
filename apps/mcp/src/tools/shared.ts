@@ -101,9 +101,53 @@ export const tryGetBoxModel = async (
 
 // #endregion
 
-// #region mouse/click
+// #region mouse/touch/click
 
-/** dispatches a mouseMoved + mousePressed + mouseReleased sequence */
+// 50ms tap duration — safely below the ~500ms long-press threshold
+const TAP_DURATION_S = 0.05;
+
+/**
+ * dispatches a touchStart + touchEnd sequence for a tap.
+ * uses explicit timestamps so wire latency between the two CDP calls
+ * can't be misinterpreted as a long press.
+ */
+const dispatchTap = async (
+	relay: RelayConnection,
+	session: SessionState,
+	x: number,
+	y: number,
+	frameId?: string,
+): Promise<void> => {
+	const timestamp = Date.now() / 1000;
+	await sendCdpCommand(
+		relay,
+		session,
+		'Input.dispatchTouchEvent',
+		{
+			type: 'touchStart',
+			touchPoints: [{ x, y }],
+			timestamp,
+		},
+		{ frameId },
+	);
+	await sendCdpCommand(
+		relay,
+		session,
+		'Input.dispatchTouchEvent',
+		{
+			type: 'touchEnd',
+			touchPoints: [],
+			timestamp: timestamp + TAP_DURATION_S,
+		},
+		{ frameId },
+	);
+};
+
+/**
+ * dispatches a click or tap at the given coordinates.
+ * uses touch events when touch emulation is active (left-button only),
+ * otherwise falls back to mouseMoved + mousePressed + mouseReleased.
+ */
 export const dispatchClick = async (
 	relay: RelayConnection,
 	session: SessionState,
@@ -113,6 +157,16 @@ export const dispatchClick = async (
 	button: 'left' | 'right' | 'middle' = 'left',
 	frameId?: string,
 ): Promise<void> => {
+	// touch has no right/middle button — only use tap for left clicks
+	const { touch } = session.emulationState;
+	if (touch && button === 'left') {
+		for (let i = 0; i < clickCount; i++) {
+			// oxlint-disable-next-line no-await-in-loop -- sequential taps
+			await dispatchTap(relay, session, x, y, frameId);
+		}
+		return;
+	}
+
 	await sendCdpCommand(
 		relay,
 		session,
@@ -150,6 +204,96 @@ export const dispatchClick = async (
 			buttons: 0,
 			clickCount,
 		},
+		{ frameId },
+	);
+};
+
+/** dispatches a drag from one point to another, using touch or mouse events */
+export const dispatchDrag = async (
+	relay: RelayConnection,
+	session: SessionState,
+	from: { x: number; y: number },
+	to: { x: number; y: number },
+	steps: number,
+	stepDelayMs: number,
+	frameId?: string,
+): Promise<void> => {
+	if (session.emulationState.touch) {
+		await sendCdpCommand(
+			relay,
+			session,
+			'Input.dispatchTouchEvent',
+			{
+				type: 'touchStart',
+				touchPoints: [{ x: from.x, y: from.y }],
+			},
+			{ frameId },
+		);
+		for (let i = 1; i <= steps; i++) {
+			const t = i / steps;
+			const x = Math.round(from.x + (to.x - from.x) * t);
+			const y = Math.round(from.y + (to.y - from.y) * t);
+			// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
+			await sendCdpCommand(
+				relay,
+				session,
+				'Input.dispatchTouchEvent',
+				{
+					type: 'touchMove',
+					touchPoints: [{ x, y }],
+				},
+				{ frameId },
+			);
+			// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
+			await new Promise((r) => setTimeout(r, stepDelayMs));
+		}
+		await sendCdpCommand(
+			relay,
+			session,
+			'Input.dispatchTouchEvent',
+			{
+				type: 'touchEnd',
+				touchPoints: [],
+			},
+			{ frameId },
+		);
+		return;
+	}
+
+	await sendCdpCommand(
+		relay,
+		session,
+		'Input.dispatchMouseEvent',
+		{ type: 'mouseMoved', x: from.x, y: from.y },
+		{ frameId },
+	);
+	await sendCdpCommand(
+		relay,
+		session,
+		'Input.dispatchMouseEvent',
+		{ type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1 },
+		{ frameId },
+	);
+	for (let i = 1; i <= steps; i++) {
+		const t = i / steps;
+		const x = Math.round(from.x + (to.x - from.x) * t);
+		const y = Math.round(from.y + (to.y - from.y) * t);
+		// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
+		await sendCdpCommand(
+			relay,
+			session,
+			'Input.dispatchMouseEvent',
+			{ type: 'mouseMoved', x, y, buttons: 1 },
+			{ frameId },
+		);
+		// oxlint-disable-next-line no-await-in-loop -- sequential drag steps
+		await new Promise((r) => setTimeout(r, stepDelayMs));
+	}
+	await sendCdpCommand(
+		relay,
+		session,
+		'Input.dispatchMouseEvent',
+		{ type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0 },
 		{ frameId },
 	);
 };
