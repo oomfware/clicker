@@ -454,7 +454,7 @@ export const registerInteractionTools = (
 					}
 					if ('value' in this) {
 						this.value = '';
-						this.dispatchEvent(new Event('input', { bubbles: true }));
+						this.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContent' }));
 					}
 				}`,
 					objectId,
@@ -471,7 +471,7 @@ export const registerInteractionTools = (
 				'Runtime.callFunctionOn',
 				{
 					functionDeclaration: `function() {
-					this.dispatchEvent(new Event('input', { bubbles: true }));
+					this.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
 					this.dispatchEvent(new Event('change', { bubbles: true }));
 				}`,
 					objectId,
