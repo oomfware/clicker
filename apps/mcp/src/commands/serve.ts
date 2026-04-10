@@ -104,7 +104,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 
-			// network monitoring (only buffered when network_enable has been called)
+			// network events are buffered only while capture_network is active
 			case 'Network.requestWillBeSent': {
 				const req = p.request as
 					| { url?: string; method?: string; headers?: Record<string, string>; postData?: string }

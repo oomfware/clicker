@@ -121,10 +121,10 @@ export const registerNetworkTools = (
 	session: SessionState,
 ): void => {
 	server.registerTool(
-		'network_enable',
+		'capture_network',
 		{
 			description:
-				'Start capturing network requests on the active tab. Requests accumulate across navigations until network_disable is called. Only captures requests from the tab that was active when enabled; call again after select_tab to capture on a different tab.',
+				'Start capturing network requests for the current session. Requests accumulate in the buffer across navigations and tab switches until stop_network_capture is called.',
 			inputSchema: {
 				clear: z.boolean().default(true).describe('Clear any previously buffered requests before starting'),
 			},
@@ -139,14 +139,14 @@ export const registerNetworkTools = (
 			await sendCdpCommand(relay, session, 'Network.enable', {});
 			session.setNetworkEnabled(true);
 
-			return { content: [{ type: 'text', text: 'Network monitoring enabled.' }] };
+			return { content: [{ type: 'text', text: 'Network capture started.' }] };
 		},
 	);
 
 	server.registerTool(
-		'network_disable',
+		'stop_network_capture',
 		{
-			description: 'Stop capturing network requests and clear the buffer.',
+			description: 'Stop capturing network requests and clear the buffered requests.',
 		},
 		async () => {
 			if (!session.isConnected) return notConnectedError();
@@ -158,7 +158,7 @@ export const registerNetworkTools = (
 			}
 			session.setNetworkEnabled(false);
 
-			return { content: [{ type: 'text', text: 'Network monitoring disabled.' }] };
+			return { content: [{ type: 'text', text: 'Network capture stopped and cleared.' }] };
 		},
 	);
 
@@ -166,7 +166,7 @@ export const registerNetworkTools = (
 		'network_requests',
 		{
 			description:
-				'List captured network requests. Requires network_enable first. Use resource_type to filter (e.g. XHR, Fetch, Document, Stylesheet, Script, Image).',
+				'List captured network requests from the current session buffer. Requires capture_network first. Use resource_type to filter (e.g. XHR, Fetch, Document, Stylesheet, Script, Image).',
 			inputSchema: {
 				resource_type: z
 					.string()
@@ -185,7 +185,7 @@ export const registerNetworkTools = (
 
 			if (!session.networkEnabled) {
 				return {
-					content: [{ type: 'text', text: 'Network monitoring is not enabled. Call network_enable first.' }],
+					content: [{ type: 'text', text: 'Network capture is not running. Call capture_network first.' }],
 					isError: true,
 				};
 			}
