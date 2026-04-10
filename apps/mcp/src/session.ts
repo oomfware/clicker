@@ -134,7 +134,6 @@ export class SessionState {
 	#tabConsoleMessages = new Map<number, ConsoleMessage[]>();
 	#tabJsErrors = new Map<number, JsError[]>();
 	#tabDialogs = new Map<number, DialogInfo>();
-	#networkEnabled = false;
 	#networkRequests = new Map<string, NetworkRequest>();
 	#emulationState: EmulationState = {};
 
@@ -221,7 +220,6 @@ export class SessionState {
 		this.#lastInteractedFrameId = undefined;
 		this.#refMap.clear();
 		this.#clearPerTabState();
-		this.#networkEnabled = false;
 		this.#networkRequests.clear();
 		this.#emulationState = {};
 	}
@@ -318,25 +316,12 @@ export class SessionState {
 
 	// #region network monitoring
 
-	get networkEnabled(): boolean {
-		return this.#networkEnabled;
-	}
-
-	setNetworkEnabled(enabled: boolean): void {
-		this.#networkEnabled = enabled;
-		if (!enabled) {
-			this.#networkRequests.clear();
-		}
-	}
-
 	/** records or updates a network request from CDP events */
 	updateNetworkRequest(
 		requestId: string,
 		tabId: number,
 		update: Partial<Omit<NetworkRequest, 'tabId'>>,
 	): void {
-		if (!this.#networkEnabled) return;
-
 		const existing = this.#networkRequests.get(requestId);
 		if (existing) {
 			Object.assign(existing, update);

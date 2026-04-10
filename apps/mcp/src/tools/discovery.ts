@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { RelayConnection } from '../connection.ts';
 import type { SessionState } from '../session.ts';
 
-import { formatTabLine } from './shared.ts';
+import { enableNetworkForActiveTab, formatTabLine } from './shared.ts';
 
 export const registerDiscoveryTools = (
 	server: McpServer,
@@ -96,6 +96,7 @@ export const registerDiscoveryTools = (
 			const { workspace } = payload.result;
 			const activeTabId = workspace.tabs[0]?.tabId;
 			session.connectWorkspace(browser_id, workspace.id, activeTabId);
+			enableNetworkForActiveTab(relay, session);
 
 			const tabList = workspace.tabs.map((t) => formatTabLine(t, activeTabId)).join('\n');
 
@@ -137,6 +138,7 @@ export const registerDiscoveryTools = (
 			const { connectionId, workspace, otherSessions } = response.payload.result;
 			const activeTabId = workspace.tabs.find((tab) => tab.active)?.tabId ?? workspace.tabs[0]?.tabId;
 			session.connectWorkspace(connectionId, workspace_id, activeTabId);
+			enableNetworkForActiveTab(relay, session);
 
 			const tabList = workspace.tabs.map((t) => formatTabLine(t, activeTabId)).join('\n');
 			let text = `Connected to workspace "${workspace.title}".\nTabs:\n${tabList}`;
@@ -192,7 +194,6 @@ const formatStatus = (browsers: BrowserStatus[], session: SessionState): string 
 			lines.push(`  Tab: ${session.activeTabId}`);
 		}
 		lines.push(`  Refs: ${session.refCount}`);
-		lines.push(`  Network: ${session.networkEnabled ? 'enabled' : 'disabled'}`);
 		const dialog = session.getDialog();
 		if (dialog) {
 			lines.push(`  Dialog: ${dialog.type} — "${dialog.message}"`);

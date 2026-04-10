@@ -115,86 +115,55 @@ const formatMs = (ms: number): string => {
 
 // #endregion
 
+const RESOURCE_TYPES = [
+	'Document',
+	'Stylesheet',
+	'Image',
+	'Media',
+	'Font',
+	'Script',
+	'TextTrack',
+	'XHR',
+	'Fetch',
+	'Prefetch',
+	'EventSource',
+	'WebSocket',
+	'Manifest',
+	'Ping',
+	'Other',
+] as const;
+
 export const registerNetworkTools = (
 	server: McpServer,
 	relay: RelayConnection,
 	session: SessionState,
 ): void => {
 	server.registerTool(
-		'capture_network',
+		'list_network_requests',
 		{
 			description:
-				'Start capturing network requests for the current session. Requests accumulate in the buffer across navigations and tab switches until stop_network_capture is called.',
-			inputSchema: {
-				clear: z.boolean().default(true).describe('Clear any previously buffered requests before starting'),
-			},
-		},
-		async ({ clear }) => {
-			if (!session.isConnected) return notConnectedError();
-
-			if (clear) {
-				session.clearNetworkRequests();
-			}
-
-			await sendCdpCommand(relay, session, 'Network.enable', {});
-			session.setNetworkEnabled(true);
-
-			return { content: [{ type: 'text', text: 'Network capture started.' }] };
-		},
-	);
-
-	server.registerTool(
-		'stop_network_capture',
-		{
-			description: 'Stop capturing network requests and clear the buffered requests.',
-		},
-		async () => {
-			if (!session.isConnected) return notConnectedError();
-
-			try {
-				await sendCdpCommand(relay, session, 'Network.disable', {});
-			} catch {
-				// may fail if tab was closed; still clear local state
-			}
-			session.setNetworkEnabled(false);
-
-			return { content: [{ type: 'text', text: 'Network capture stopped and cleared.' }] };
-		},
-	);
-
-	server.registerTool(
-		'network_requests',
-		{
-			description:
-				'List captured network requests from the current session buffer. Requires capture_network first. Use resource_type to filter (e.g. XHR, Fetch, Document, Stylesheet, Script, Image).',
+				'List captured network requests. Network capture is always active for the current tab.',
 			inputSchema: {
 				resource_type: z
-					.string()
+					.enum(RESOURCE_TYPES)
 					.optional()
-					.describe('Filter by resource type (e.g. XHR, Fetch, Document, Script, Stylesheet, Image)'),
+					.describe('Filter by resource type'),
 				status_code: z.number().optional().describe('Filter by exact HTTP status code'),
 				url_contains: z.string().optional().describe('Filter by URL substring'),
 				failed_only: z.boolean().default(false).describe('Show only failed requests'),
-				min_duration_ms: z.number().optional().describe('Filter to requests slower than this threshold'),
-				limit: z.number().default(50).describe('Maximum number of requests to return'),
+				min_duration_ms: z.number().optional().describe('Minimum request duration in ms'),
+				page_size: z.number().default(50).describe('Maximum number of requests per page'),
+				page_index: z.number().default(0).describe('Zero-based page index'),
 			},
 			annotations: { readOnlyHint: true },
 		},
-		async ({ resource_type, status_code, url_contains, failed_only, min_duration_ms, limit }) => {
+		async ({ resource_type, status_code, url_contains, failed_only, min_duration_ms, page_size, page_index }) => {
 			if (!session.isConnected) return notConnectedError();
-
-			if (!session.networkEnabled) {
-				return {
-					content: [{ type: 'text', text: 'Network capture is not running. Call capture_network first.' }],
-					isError: true,
-				};
-			}
 
 			let requests = session.getNetworkRequests();
 
 			if (resource_type) {
-				const rt = resource_type.toLowerCase();
-				requests = requests.filter((r) => r.resourceType.toLowerCase() === rt);
+				requests = requests.filter((r) => r.resourceType === resource_type);
 			}
 			if (status_code !== undefined) {
 				requests = requests.filter((r) => r.status === status_code);
@@ -216,10 +185,12 @@ export const registerNetworkTools = (
 				});
 			}
 
-			requests = requests.slice(-limit);
+			const total = requests.length;
+			const start = page_index * page_size;
+			requests = requests.slice(start, start + page_size);
 
 			if (requests.length === 0) {
-				return { content: [{ type: 'text', text: 'No matching network requests captured.' }] };
+				return { content: [{ type: 'text', text: total > 0 ? 'No requests on this page.' : 'No matching network requests captured.' }] };
 			}
 
 			const lines = requests.map((r) => {
@@ -236,9 +207,9 @@ export const registerNetworkTools = (
 				return `[${r.requestId}] ${r.method} ${status} ${r.url} (${r.resourceType}${size}${duration})`;
 			});
 
-			const total = session.getNetworkRequests().length;
 			if (total > requests.length) {
-				lines.push(`\n(showing ${requests.length} of ${total} total requests)`);
+				const totalPages = Math.ceil(total / page_size);
+				lines.push(`\n(page ${page_index + 1}/${totalPages}, ${total} total requests)`);
 			}
 
 			return { content: [{ type: 'text', text: lines.join('\n') }] };
@@ -246,12 +217,11 @@ export const registerNetworkTools = (
 	);
 
 	server.registerTool(
-		'network_request',
+		'get_network_request',
 		{
-			description:
-				'Get full details of a specific network request by its ID, including headers and optionally the response body.',
+			description: 'Get full details of a specific network request by its ID.',
 			inputSchema: {
-				request_id: z.string().describe('Request ID from network_requests output'),
+				request_id: z.string().describe('Request ID from list_network_requests output'),
 				include_body: z.boolean().default(false).describe('Fetch and include the response body'),
 			},
 			annotations: { readOnlyHint: true },

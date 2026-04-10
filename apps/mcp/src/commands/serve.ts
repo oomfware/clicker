@@ -9,6 +9,7 @@ import { registerInteractionTools } from '../tools/interaction.ts';
 import { registerNavigationTools } from '../tools/navigation.ts';
 import { registerNetworkTools } from '../tools/network.ts';
 import { registerPageTools } from '../tools/page.ts';
+import { enableNetworkForActiveTab } from '../tools/shared.ts';
 import { registerStateTools } from '../tools/state.ts';
 import { registerWebTools } from '../tools/web.ts';
 
@@ -40,6 +41,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 	relay.on('tab:active-changed', (workspaceId, tabId) => {
 		if (workspaceId !== session.workspaceId) return;
 		session.selectTab(tabId);
+		enableNetworkForActiveTab(relay, session);
 	});
 
 	relay.on('workspace:destroyed', (workspaceId) => {

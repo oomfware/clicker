@@ -10,6 +10,15 @@ import { takeSnapshot } from './state.ts';
 
 export type TextContent = { type: 'text'; text: string };
 
+/**
+ * enables Network domain capture for the active tab.
+ * best-effort — silently ignores failures (e.g. restricted pages, closed tabs).
+ */
+export const enableNetworkForActiveTab = (relay: RelayConnection, session: SessionState): void => {
+	if (session.activeTabId === null) return;
+	sendCdpCommand(relay, session, 'Network.enable', {}).catch(() => {});
+};
+
 /** standard error response for tools that require a workspace connection */
 export const notConnectedError = (): { content: TextContent[]; isError: true } => ({
 	content: [

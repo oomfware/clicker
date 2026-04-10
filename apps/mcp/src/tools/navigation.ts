@@ -7,7 +7,7 @@ import { clampTimeout, sendCdpCommand } from '../cdp.ts';
 import type { RelayConnection } from '../connection.ts';
 import type { SessionState } from '../session.ts';
 
-import { formatTabLine, notConnectedError } from './shared.ts';
+import { enableNetworkForActiveTab, formatTabLine, notConnectedError } from './shared.ts';
 
 const readLocationHref = async (relay: RelayConnection, session: SessionState): Promise<string | null> => {
 	try {
@@ -197,6 +197,7 @@ export const registerNavigationTools = (
 
 				if (target === 'foreground_tab') {
 					session.selectTab(payload.result.tab.tabId);
+					enableNetworkForActiveTab(relay, session);
 				}
 
 				const label = target === 'background_tab' ? 'background tab' : 'new tab';
@@ -413,6 +414,7 @@ export const registerNavigationTools = (
 			}
 
 			session.selectTab(targetTabId);
+			enableNetworkForActiveTab(relay, session);
 			return {
 				content: [
 					{
