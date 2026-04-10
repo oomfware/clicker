@@ -419,6 +419,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 							this.value = ${JSON.stringify(value)};
 							if (this.value !== ${JSON.stringify(value)}) return false;
 							if (this.value !== previousValue) {
+								this.dispatchEvent(new Event('input', { bubbles: true }));
 								this.dispatchEvent(new Event('change', { bubbles: true }));
 							}
 							return true;
@@ -429,6 +430,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 							const previousValue = this.value;
 							this.value = opt.value;
 							if (this.value !== previousValue) {
+								this.dispatchEvent(new Event('input', { bubbles: true }));
 								this.dispatchEvent(new Event('change', { bubbles: true }));
 							}
 							return true;
