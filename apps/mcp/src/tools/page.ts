@@ -470,8 +470,9 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'console',
 		{
-			description: 'Read buffered browser console messages and JS errors from the active tab.',
+			description: 'Read buffered browser console messages and JS errors.',
 			inputSchema: {
+				tab_id: z.number().optional().describe('Tab ID to read from (defaults to active tab)'),
 				level: z
 					.enum(['all', 'log', 'warn', 'error', 'info', 'debug'])
 					.default('all')
@@ -480,10 +481,10 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 			},
 			annotations: { readOnlyHint: true },
 		},
-		async ({ level, clear }) => {
+		async ({ tab_id, level, clear }) => {
 			if (!session.isConnected) return notConnectedError();
-			const messages = session.getConsoleMessages(level === 'all' ? undefined : level);
-			const errors = session.getJsErrors();
+			const messages = session.getConsoleMessages(tab_id, level === 'all' ? undefined : level);
+			const errors = session.getJsErrors(tab_id);
 
 			const lines: string[] = [];
 			if (messages.length > 0) {
@@ -509,8 +510,8 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 			}
 
 			if (clear) {
-				session.clearConsole();
-				session.clearErrors();
+				session.clearConsole(tab_id);
+				session.clearErrors(tab_id);
 			}
 
 			return { content: [{ type: 'text', text: lines.join('\n') }] };

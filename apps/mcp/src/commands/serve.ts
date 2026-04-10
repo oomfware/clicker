@@ -30,9 +30,11 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 	registerWebTools(server, relay, session);
 
 	relay.on('tab:removed', (workspaceId, tabId) => {
-		if (workspaceId !== session.workspaceId || tabId !== session.activeTabId) return;
-		// active tab was closed — clear tab selection but preserve console/network state
-		session.selectTab(undefined);
+		if (workspaceId !== session.workspaceId) return;
+		session.removeTab(tabId);
+		if (tabId === session.activeTabId) {
+			session.selectTab(undefined);
+		}
 	});
 
 	relay.on('tab:active-changed', (workspaceId, tabId) => {
@@ -46,20 +48,22 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 		}
 	});
 
-	// buffer console messages, JS errors, and dialog events from the active tab
+	// buffer console, error, dialog, and network events from all tabs in the workspace.
+	// console/error/dialog events are stored per-tab so switching tabs doesn't lose data.
+	// network events are restricted to the active tab (Network.enable is only sent there).
 	/* oxlint-disable no-unsafe-type-assertion, no-base-to-string -- CDP event params are untyped */
 	relay.on('cdp:event', (workspaceId, tabId, method, params, eventSessionId) => {
 		if (workspaceId !== session.workspaceId) return;
-		// only buffer events from the active tab (or when no tab is selected yet)
-		if (session.activeTabId !== null && tabId !== session.activeTabId) return;
 		const p = params ?? {};
+		const isActiveTab = session.activeTabId === null || tabId === session.activeTabId;
+
 		switch (method) {
 			case 'Runtime.consoleAPICalled': {
 				const type = typeof p.type === 'string' ? p.type : 'log';
 				const args = Array.isArray(p.args) ? p.args : [];
 				const first = args[0] as { value?: unknown; description?: string } | undefined;
 				const text = first?.value !== undefined ? String(first.value) : (first?.description ?? '');
-				session.addConsoleMessage({ timestamp: Date.now(), level: type, text });
+				session.addConsoleMessage(tabId, { timestamp: Date.now(), level: type, text });
 				break;
 			}
 			case 'Runtime.exceptionThrown': {
@@ -72,7 +76,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 					  }
 					| undefined;
 				const text = ed?.exception?.description ?? ed?.text ?? 'unknown error';
-				session.addJsError({
+				session.addJsError(tabId, {
 					timestamp: Date.now(),
 					text,
 					line: ed?.lineNumber,
@@ -81,7 +85,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Page.javascriptDialogOpening': {
-				session.setDialog({
+				session.setDialog(tabId, {
 					type: typeof p.type === 'string' ? p.type : 'unknown',
 					message: typeof p.message === 'string' ? p.message : '',
 					url: typeof p.url === 'string' ? p.url : undefined,
@@ -90,22 +94,23 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Page.javascriptDialogClosed': {
-				session.clearDialog();
+				session.clearDialog(tabId);
 				break;
 			}
 			case 'Page.frameNavigated': {
-				// rotate console/error buffers on top-level navigation only;
+				// clear per-tab state on top-level navigation only;
 				// ignore child session events (iframe navigations) and sub-frame navigations
 				if (eventSessionId) break;
 				const frame = p.frame as { parentId?: string } | undefined;
 				if (!frame?.parentId) {
-					session.onNavigation();
+					session.onNavigation(tabId);
 				}
 				break;
 			}
 
-			// network events are buffered only while capture_network is active
+			// network events are buffered only from the active tab
 			case 'Network.requestWillBeSent': {
+				if (!isActiveTab) break;
 				const req = p.request as
 					| { url?: string; method?: string; headers?: Record<string, string>; postData?: string }
 					| undefined;
@@ -124,6 +129,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Network.responseReceived': {
+				if (!isActiveTab) break;
 				const resp = p.response as
 					| {
 							status?: number;
@@ -152,6 +158,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Network.loadingFinished': {
+				if (!isActiveTab) break;
 				const id = typeof p.requestId === 'string' ? p.requestId : '';
 				if (id) {
 					session.updateNetworkRequest(id, tabId, {
@@ -162,6 +169,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Network.loadingFailed': {
+				if (!isActiveTab) break;
 				const id = typeof p.requestId === 'string' ? p.requestId : '';
 				if (id) {
 					session.updateNetworkRequest(id, tabId, {

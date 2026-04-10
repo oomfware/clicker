@@ -128,7 +128,7 @@ const waitForNavigation = async (
 	// cancel the losing racer so it stops polling/listening
 	abort.abort();
 
-	session.onNavigation();
+	session.onNavigation(session.activeTabId);
 	return readLocationHref(relay, session);
 };
 
@@ -270,7 +270,7 @@ export const registerNavigationTools = (
 		const load = waitForPageLoad(relay, session, 5_000, abort.signal);
 		await sendCdpCommand(relay, session, 'Page.reload', {});
 		await load;
-		session.onNavigation();
+		session.onNavigation(session.activeTabId);
 		return { content: [{ type: 'text', text: 'Page reloaded.' }] };
 	});
 

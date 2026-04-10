@@ -131,12 +131,41 @@ export class SessionState {
 	// #region per-tab runtime state
 
 	#refMap = new Map<string, RefEntry>();
-	#consoleMessages: ConsoleMessage[] = [];
-	#jsErrors: JsError[] = [];
-	#pendingDialog: DialogInfo | null = null;
+	#tabConsoleMessages = new Map<number, ConsoleMessage[]>();
+	#tabJsErrors = new Map<number, JsError[]>();
+	#tabDialogs = new Map<number, DialogInfo>();
 	#networkEnabled = false;
 	#networkRequests = new Map<string, NetworkRequest>();
 	#emulationState: EmulationState = {};
+
+	#resolveTabId(tabId?: number): number | null {
+		return tabId ?? this.#activeTabId;
+	}
+
+	#clearPerTabState(): void {
+		this.#tabConsoleMessages.clear();
+		this.#tabJsErrors.clear();
+		this.#tabDialogs.clear();
+	}
+
+	#deleteTabState(tabId: number): void {
+		this.#tabConsoleMessages.delete(tabId);
+		this.#tabJsErrors.delete(tabId);
+		this.#tabDialogs.delete(tabId);
+	}
+
+	/** pushes an item into a per-tab capped buffer, evicting the oldest entry at capacity */
+	#bufferEntry<T>(map: Map<number, T[]>, tabId: number, entry: T, maxSize: number): void {
+		let list = map.get(tabId);
+		if (!list) {
+			list = [];
+			map.set(tabId, list);
+		}
+		list.push(entry);
+		if (list.length > maxSize) {
+			list.shift();
+		}
+	}
 
 	// #endregion
 
@@ -151,26 +180,37 @@ export class SessionState {
 		this.#workspaceId = workspaceId;
 		this.#activeTabId = activeTabId ?? null;
 		this.#lastInteractedFrameId = undefined;
-		this.#resetTabState();
+		this.#refMap.clear();
+		this.#clearPerTabState();
 	}
 
 	/**
-	 * switches the selected tab without clearing console, errors, or network state.
-	 * use this for tab activation events and explicit select_tab.
+	 * switches the selected tab. clears refs (DOM-specific) but preserves
+	 * per-tab console, errors, and dialog state.
 	 */
 	selectTab(tabId: number | undefined): void {
 		this.#activeTabId = tabId ?? null;
 		this.#lastInteractedFrameId = undefined;
-		this.#resetTabState();
+		this.#refMap.clear();
 	}
 
-	/** clears navigation-scoped state (refs, console, errors). call after top-level navigations. */
-	onNavigation(): void {
-		this.#refMap.clear();
-		this.#lastInteractedFrameId = undefined;
-		this.#consoleMessages = [];
-		this.#jsErrors = [];
-		this.#pendingDialog = null;
+	/**
+	 * clears navigation-scoped state for a specific tab.
+	 * refs are only cleared when the navigated tab is the active tab.
+	 * no-ops if tabId is null (no tab selected).
+	 */
+	onNavigation(tabId: number | null): void {
+		if (tabId === null) return;
+		this.#deleteTabState(tabId);
+		if (tabId === this.#activeTabId) {
+			this.#refMap.clear();
+			this.#lastInteractedFrameId = undefined;
+		}
+	}
+
+	/** removes all per-tab state for a closed tab */
+	removeTab(tabId: number): void {
+		this.#deleteTabState(tabId);
 	}
 
 	/** disconnects the session. full state reset including network and emulation. */
@@ -179,17 +219,11 @@ export class SessionState {
 		this.#workspaceId = null;
 		this.#activeTabId = null;
 		this.#lastInteractedFrameId = undefined;
-		this.#resetTabState();
+		this.#refMap.clear();
+		this.#clearPerTabState();
 		this.#networkEnabled = false;
 		this.#networkRequests.clear();
 		this.#emulationState = {};
-	}
-
-	#resetTabState(): void {
-		this.#refMap.clear();
-		this.#consoleMessages = [];
-		this.#jsErrors = [];
-		this.#pendingDialog = null;
 	}
 
 	// #endregion
@@ -229,51 +263,55 @@ export class SessionState {
 
 	// #region console/error buffering
 
-	addConsoleMessage(msg: ConsoleMessage): void {
-		this.#consoleMessages.push(msg);
-		if (this.#consoleMessages.length > MAX_CONSOLE_MESSAGES) {
-			this.#consoleMessages.shift();
-		}
+	addConsoleMessage(tabId: number, msg: ConsoleMessage): void {
+		this.#bufferEntry(this.#tabConsoleMessages, tabId, msg, MAX_CONSOLE_MESSAGES);
 	}
 
-	addJsError(err: JsError): void {
-		this.#jsErrors.push(err);
-		if (this.#jsErrors.length > MAX_JS_ERRORS) {
-			this.#jsErrors.shift();
-		}
+	addJsError(tabId: number, err: JsError): void {
+		this.#bufferEntry(this.#tabJsErrors, tabId, err, MAX_JS_ERRORS);
 	}
 
-	getConsoleMessages(level?: string): ConsoleMessage[] {
-		if (!level) return [...this.#consoleMessages];
-		return this.#consoleMessages.filter((m) => m.level === level);
+	getConsoleMessages(tabId?: number, level?: string): ConsoleMessage[] {
+		const id = this.#resolveTabId(tabId);
+		if (id === null) return [];
+		const messages = this.#tabConsoleMessages.get(id) ?? [];
+		if (!level) return [...messages];
+		return messages.filter((m) => m.level === level);
 	}
 
-	getJsErrors(): JsError[] {
-		return [...this.#jsErrors];
+	getJsErrors(tabId?: number): JsError[] {
+		const id = this.#resolveTabId(tabId);
+		if (id === null) return [];
+		return [...(this.#tabJsErrors.get(id) ?? [])];
 	}
 
-	clearConsole(): void {
-		this.#consoleMessages = [];
+	clearConsole(tabId?: number): void {
+		const id = this.#resolveTabId(tabId);
+		if (id !== null) this.#tabConsoleMessages.delete(id);
 	}
 
-	clearErrors(): void {
-		this.#jsErrors = [];
+	clearErrors(tabId?: number): void {
+		const id = this.#resolveTabId(tabId);
+		if (id !== null) this.#tabJsErrors.delete(id);
 	}
 
 	// #endregion
 
 	// #region dialog tracking
 
-	setDialog(dialog: DialogInfo): void {
-		this.#pendingDialog = dialog;
+	setDialog(tabId: number, dialog: DialogInfo): void {
+		this.#tabDialogs.set(tabId, dialog);
 	}
 
-	clearDialog(): void {
-		this.#pendingDialog = null;
+	clearDialog(tabId?: number): void {
+		const id = this.#resolveTabId(tabId);
+		if (id !== null) this.#tabDialogs.delete(id);
 	}
 
-	getDialog(): DialogInfo | null {
-		return this.#pendingDialog;
+	getDialog(tabId?: number): DialogInfo | null {
+		const id = this.#resolveTabId(tabId);
+		if (id === null) return null;
+		return this.#tabDialogs.get(id) ?? null;
 	}
 
 	// #endregion
