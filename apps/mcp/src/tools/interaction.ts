@@ -449,12 +449,14 @@ export const registerInteractionTools = (
 				{
 					functionDeclaration: `function() {
 					this.focus();
-					if ('select' in this && typeof this.select === 'function') {
-						this.select();
-					}
 					if ('value' in this) {
+						if ('select' in this && typeof this.select === 'function') {
+							this.select();
+						}
 						this.value = '';
 						this.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContent' }));
+					} else if (this.isContentEditable) {
+						this.textContent = '';
 					}
 				}`,
 					objectId,
