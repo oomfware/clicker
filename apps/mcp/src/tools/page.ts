@@ -490,17 +490,20 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 			if (messages.length > 0) {
 				lines.push('Console messages:');
 				for (const msg of messages) {
-					lines.push(`  [${msg.level}] ${msg.text}`);
+					const src = msg.url ? ` — ${msg.url}` : '';
+					lines.push(`  [${msg.level}] ${msg.text}${src}`);
 				}
 			}
 			if (errors.length > 0) {
 				if (lines.length > 0) lines.push('');
 				lines.push('JS errors:');
 				for (const err of errors) {
-					const loc =
+					const pos =
 						err.line !== undefined
-							? ` (line ${err.line}${err.column !== undefined ? `:${err.column}` : ''})`
+							? `line ${err.line}${err.column !== undefined ? `:${err.column}` : ''}`
 							: '';
+					const loc =
+						err.url && pos ? ` (${err.url} ${pos})` : err.url ? ` (${err.url})` : pos ? ` (${pos})` : '';
 					lines.push(`  ${err.text}${loc}`);
 				}
 			}

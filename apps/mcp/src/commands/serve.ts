@@ -63,15 +63,27 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 			case 'Runtime.consoleAPICalled': {
 				const type = typeof p.type === 'string' ? p.type : 'log';
 				const args = Array.isArray(p.args) ? p.args : [];
-				const first = args[0] as { value?: unknown; description?: string } | undefined;
-				const text = first?.value !== undefined ? String(first.value) : (first?.description ?? '');
-				session.addConsoleMessage(tabId, { timestamp: Date.now(), level: type, text });
+				const text =
+					args.length > 0
+						? (args as { value?: unknown; description?: string }[])
+								.map((a) => (a.value !== undefined ? String(a.value) : (a.description ?? '')))
+								.join(' ')
+						: '';
+				const stackTrace = p.stackTrace as { callFrames?: { url?: string }[] } | undefined;
+				const url = stackTrace?.callFrames?.[0]?.url;
+				session.addConsoleMessage(tabId, {
+					timestamp: Date.now(),
+					level: type,
+					text,
+					url: typeof url === 'string' && url ? url : undefined,
+				});
 				break;
 			}
 			case 'Runtime.exceptionThrown': {
 				const ed = p.exceptionDetails as
 					| {
 							text?: string;
+							url?: string;
 							exception?: { description?: string };
 							lineNumber?: number;
 							columnNumber?: number;
@@ -81,6 +93,7 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				session.addJsError(tabId, {
 					timestamp: Date.now(),
 					text,
+					url: typeof ed?.url === 'string' && ed.url ? ed.url : undefined,
 					line: ed?.lineNumber,
 					column: ed?.columnNumber,
 				});
