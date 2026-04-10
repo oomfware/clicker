@@ -485,6 +485,9 @@ const detectElements = async <TMeta, TResult>(
 	const map = new Map<string, TResult>();
 	const target = frameId ? { frameId } : undefined;
 
+	let arrayObjectId: string | undefined;
+	let elArrayObjectId: string | undefined;
+
 	try {
 		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 		const evalResult = (await sendCdpCommand(
@@ -499,7 +502,7 @@ const detectElements = async <TMeta, TResult>(
 			return map;
 		}
 
-		const arrayObjectId = evalResult.result.objectId;
+		arrayObjectId = evalResult.result.objectId;
 
 		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 		const metaResult = (await sendCdpCommand(
@@ -515,63 +518,91 @@ const detectElements = async <TMeta, TResult>(
 		)) as { result: { value?: TMeta[] } };
 
 		const metas = metaResult.result.value ?? [];
-		if (metas.length === 0) {
-			await sendCdpCommand(relay, session, 'Runtime.releaseObject', { objectId: arrayObjectId }, target);
-			return map;
-		}
+		if (metas.length === 0) return map;
 
-		const resolvePromises = metas.map(async (meta, i) => {
-			try {
-				// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
-				const elResult = (await sendCdpCommand(
-					relay,
-					session,
-					'Runtime.callFunctionOn',
-					{
-						objectId: arrayObjectId,
-						functionDeclaration: `function() { return this[${i}].el; }`,
-						returnByValue: false,
-					},
-					target,
-				)) as { result: { objectId?: string } };
+		// reduce CDP round-trips: bulk-extract element refs via getProperties
+		// so we only need N describeNode calls instead of N callFunctionOn + N describeNode
+		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+		const elArrayResult = (await sendCdpCommand(
+			relay,
+			session,
+			'Runtime.callFunctionOn',
+			{
+				objectId: arrayObjectId,
+				functionDeclaration: 'function() { return this.map(function(e) { return e.el; }); }',
+				returnByValue: false,
+			},
+			target,
+		)) as { result: { objectId?: string } };
 
-				if (!elResult.result.objectId) return;
+		elArrayObjectId = elArrayResult.result.objectId;
+		if (elArrayObjectId) {
+			// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+			const propsResult = (await sendCdpCommand(
+				relay,
+				session,
+				'Runtime.getProperties',
+				{ objectId: elArrayObjectId, ownProperties: true },
+				target,
+			)) as { result: { name: string; value?: { objectId?: string } }[] };
 
-				try {
-					// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
-					const desc = (await sendCdpCommand(
-						relay,
-						session,
-						'DOM.describeNode',
-						{ objectId: elResult.result.objectId },
-						target,
-					)) as { node: { backendNodeId: number } };
+			const resolvePromises = propsResult.result
+				.filter(
+					(p): p is typeof p & { value: { objectId: string } } =>
+						/^\d+$/.test(p.name) && p.value?.objectId != null,
+				)
+				.map(async (prop) => {
+					const index = Number(prop.name);
+					const meta = metas[index];
+					if (!meta) return;
+					try {
+						// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+						const desc = (await sendCdpCommand(
+							relay,
+							session,
+							'DOM.describeNode',
+							{ objectId: prop.value.objectId },
+							target,
+						)) as { node: { backendNodeId: number } };
 
-					const result = mapper(meta, desc.node.backendNodeId);
-					if (result !== undefined) {
-						map.set(nodeKey(frameId, desc.node.backendNodeId), result);
+						const result = mapper(meta, desc.node.backendNodeId);
+						if (result !== undefined) {
+							map.set(nodeKey(frameId, desc.node.backendNodeId), result);
+						}
+					} catch {
+						// skip elements that fail to resolve
+					} finally {
+						await sendCdpCommand(
+							relay,
+							session,
+							'Runtime.releaseObject',
+							{ objectId: prop.value.objectId },
+							target,
+						).catch(() => {});
 					}
-				} finally {
-					await sendCdpCommand(
-						relay,
-						session,
-						'Runtime.releaseObject',
-						{ objectId: elResult.result.objectId },
-						target,
-					).catch(() => {});
-				}
-			} catch {
-				// skip individual elements that fail to resolve
-			}
-		});
+				});
 
-		await Promise.all(resolvePromises);
-
-		await sendCdpCommand(relay, session, 'Runtime.releaseObject', { objectId: arrayObjectId }, target).catch(
-			() => {},
-		);
+			await Promise.all(resolvePromises);
+		}
 	} catch {
 		// element detection is best-effort — don't fail the snapshot
+	} finally {
+		const releases: Promise<unknown>[] = [];
+		if (elArrayObjectId) {
+			releases.push(
+				sendCdpCommand(relay, session, 'Runtime.releaseObject', { objectId: elArrayObjectId }, target).catch(
+					() => {},
+				),
+			);
+		}
+		if (arrayObjectId) {
+			releases.push(
+				sendCdpCommand(relay, session, 'Runtime.releaseObject', { objectId: arrayObjectId }, target).catch(
+					() => {},
+				),
+			);
+		}
+		if (releases.length > 0) await Promise.all(releases);
 	}
 
 	return map;
