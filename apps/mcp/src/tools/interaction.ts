@@ -464,14 +464,14 @@ export const registerInteractionTools = (
 			session.setLastInteractedFrameId(frameId);
 			await sendCdpCommand(relay, session, 'Input.insertText', { text: value }, { frameId });
 
-			// dispatch input + change events so frameworks (React, etc.) pick up the new value
+			// Input.insertText already fires input events natively;
+			// dispatch change because browsers only fire it on blur, not programmatic insertion
 			await sendCdpCommand(
 				relay,
 				session,
 				'Runtime.callFunctionOn',
 				{
 					functionDeclaration: `function() {
-					this.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
 					this.dispatchEvent(new Event('change', { bubbles: true }));
 				}`,
 					objectId,
