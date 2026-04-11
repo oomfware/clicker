@@ -22,6 +22,10 @@ const readLocationHref = async (relay: RelayConnection, session: SessionState): 
 	}
 };
 
+type NavigationWaitResult =
+	| { outcome: 'navigated'; finalUrl: string | null }
+	| { outcome: 'timed_out'; finalUrl: string | null };
+
 /** waits for the URL to change from `previousUrl` or match `requestedUrl` */
 const waitForUrlChange = async (
 	relay: RelayConnection,
@@ -42,7 +46,7 @@ const waitForUrlChange = async (
 		// oxlint-disable-next-line no-await-in-loop -- intentional sequential polling
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
-	return readLocationHref(relay, session);
+	return null;
 };
 
 /** SPA/history quiet window — resolve after URL changes and no further changes for this duration */
@@ -50,32 +54,37 @@ const SPA_QUIET_MS = 150;
 
 /**
  * waits for a page load event via the relay event emitter.
- * resolves on Page.loadEventFired or when cancelled via the abort signal.
+ * resolves with whether a load event was seen before timeout/cancellation.
  */
 const waitForPageLoad = (
 	relay: RelayConnection,
 	session: SessionState,
 	timeoutMs: number,
 	signal: AbortSignal,
-): Promise<void> => {
+): Promise<boolean> => {
 	return new Promise((resolve) => {
 		if (signal.aborted) {
-			resolve();
+			resolve(false);
 			return;
 		}
 
 		let settled = false;
-		const cleanup = () => {
+		const cleanup = (loaded: boolean) => {
 			if (settled) return;
 			settled = true;
 			clearTimeout(timer);
 			relay.removeListener('cdp:event', onEvent);
-			signal.removeEventListener('abort', cleanup);
-			resolve();
+			signal.removeEventListener('abort', onAbort);
+			resolve(loaded);
+		};
+		const onAbort = () => {
+			cleanup(false);
 		};
 
-		const timer = setTimeout(cleanup, timeoutMs);
-		signal.addEventListener('abort', cleanup);
+		const timer = setTimeout(() => {
+			cleanup(false);
+		}, timeoutMs);
+		signal.addEventListener('abort', onAbort);
 
 		const onEvent = (
 			workspaceId: string,
@@ -89,7 +98,7 @@ const waitForPageLoad = (
 			if (session.activeTabId !== null && tabId !== session.activeTabId) return;
 			if (eventSessionId) return;
 			if (method !== 'Page.loadEventFired') return;
-			cleanup();
+			cleanup(true);
 		};
 		relay.on('cdp:event', onEvent);
 	});
@@ -108,28 +117,41 @@ const waitForNavigation = async (
 	previousUrl: string | null,
 	expectedUrl?: string,
 	timeoutMs = 5_000,
-): Promise<string | null> => {
+): Promise<NavigationWaitResult> => {
 	const abort = new AbortController();
+	const pageLoad = waitForPageLoad(relay, session, timeoutMs, abort.signal);
+	const urlChange = waitForUrlChange(relay, session, previousUrl, expectedUrl ?? '', timeoutMs, abort.signal);
 
-	await Promise.race([
-		waitForPageLoad(relay, session, timeoutMs, abort.signal),
-		waitForUrlChange(relay, session, previousUrl, expectedUrl ?? '', timeoutMs, abort.signal).then(
-			async (href) => {
-				if (href && href !== previousUrl) {
-					await new Promise((resolve) => setTimeout(resolve, SPA_QUIET_MS));
-					return;
-				}
-				// URL didn't change — fall through to timeout
+	const result = await Promise.race([
+		pageLoad.then(async (loaded): Promise<NavigationWaitResult> => {
+			if (!loaded) {
+				return {
+					outcome: 'timed_out',
+					finalUrl: await readLocationHref(relay, session),
+				};
+			}
+			return {
+				outcome: 'navigated',
+				finalUrl: await readLocationHref(relay, session),
+			};
+		}),
+		urlChange.then(async (href): Promise<NavigationWaitResult> => {
+			if (!href || href === previousUrl) {
 				return new Promise<never>(() => {});
-			},
-		),
+			}
+			await new Promise((resolve) => setTimeout(resolve, SPA_QUIET_MS));
+			return {
+				outcome: 'navigated',
+				finalUrl: await readLocationHref(relay, session),
+			};
+		}),
 	]);
 
-	// cancel the losing racer so it stops polling/listening
 	abort.abort();
-
-	session.onNavigation(session.activeTabId);
-	return readLocationHref(relay, session);
+	if (result.outcome === 'navigated') {
+		session.onNavigation(session.activeTabId);
+	}
+	return result;
 };
 
 export const registerNavigationTools = (
@@ -215,7 +237,21 @@ export const registerNavigationTools = (
 			// start waiters before navigation so fast loads don't miss Page.loadEventFired
 			const navigation = waitForNavigation(relay, session, previousUrl, url, timeoutMs);
 			await sendCdpCommand(relay, session, 'Page.navigate', { url });
-			const finalUrl = await navigation;
+			const { outcome, finalUrl } = await navigation;
+
+			if (outcome === 'timed_out') {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: finalUrl
+								? `Timed out waiting for navigation to ${url}. Current page is ${finalUrl}.`
+								: `Timed out waiting for navigation to ${url}.`,
+						},
+					],
+					isError: true,
+				};
+			}
 
 			if (previousUrl && previousUrl !== url && finalUrl === previousUrl) {
 				return {
@@ -241,39 +277,103 @@ export const registerNavigationTools = (
 		},
 	);
 
-	server.registerTool('go_back', { description: 'Navigate the active tab back in history.' }, async () => {
-		if (!session.isConnected) return notConnectedError();
-		const previousUrl = await readLocationHref(relay, session);
-		const navigation = waitForNavigation(relay, session, previousUrl);
-		await sendCdpCommand(relay, session, 'Runtime.evaluate', { expression: 'history.back()' });
-		const finalUrl = await navigation;
-		return { content: [{ type: 'text', text: `Navigated back to ${finalUrl ?? 'unknown URL'}.` }] };
-	});
+	server.registerTool(
+		'go_back',
+		{
+			description: 'Navigate the active tab back in history.',
+			inputSchema: {
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Navigation timeout in milliseconds (1000-120000)'),
+			},
+		},
+		async ({ timeout }) => {
+			if (!session.isConnected) return notConnectedError();
+			const previousUrl = await readLocationHref(relay, session);
+			const navigation = waitForNavigation(relay, session, previousUrl, undefined, clampTimeout(timeout));
+			await sendCdpCommand(relay, session, 'Runtime.evaluate', { expression: 'history.back()' });
+			const { outcome, finalUrl } = await navigation;
+			if (outcome === 'timed_out' || finalUrl === previousUrl) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: previousUrl
+								? `Could not navigate back. Current page is still ${previousUrl}.`
+								: 'Could not navigate back.',
+						},
+					],
+					isError: true,
+				};
+			}
+			return { content: [{ type: 'text', text: `Navigated back to ${finalUrl ?? 'unknown URL'}.` }] };
+		},
+	);
 
 	server.registerTool(
 		'go_forward',
-		{ description: 'Navigate the active tab forward in history.' },
-		async () => {
+		{
+			description: 'Navigate the active tab forward in history.',
+			inputSchema: {
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Navigation timeout in milliseconds (1000-120000)'),
+			},
+		},
+		async ({ timeout }) => {
 			if (!session.isConnected) return notConnectedError();
 			const previousUrl = await readLocationHref(relay, session);
-			const navigation = waitForNavigation(relay, session, previousUrl);
+			const navigation = waitForNavigation(relay, session, previousUrl, undefined, clampTimeout(timeout));
 			await sendCdpCommand(relay, session, 'Runtime.evaluate', { expression: 'history.forward()' });
-			const finalUrl = await navigation;
+			const { outcome, finalUrl } = await navigation;
+			if (outcome === 'timed_out' || finalUrl === previousUrl) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: previousUrl
+								? `Could not navigate forward. Current page is still ${previousUrl}.`
+								: 'Could not navigate forward.',
+						},
+					],
+					isError: true,
+				};
+			}
 			return {
 				content: [{ type: 'text', text: `Navigated forward to ${finalUrl ?? 'unknown URL'}.` }],
 			};
 		},
 	);
 
-	server.registerTool('reload', { description: 'Reload the active tab.' }, async () => {
-		if (!session.isConnected) return notConnectedError();
-		const abort = new AbortController();
-		const load = waitForPageLoad(relay, session, 5_000, abort.signal);
-		await sendCdpCommand(relay, session, 'Page.reload', {});
-		await load;
-		session.onNavigation(session.activeTabId);
-		return { content: [{ type: 'text', text: 'Page reloaded.' }] };
-	});
+	server.registerTool(
+		'reload',
+		{
+			description: 'Reload the active tab.',
+			inputSchema: {
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Reload timeout in milliseconds (1000-120000)'),
+			},
+		},
+		async ({ timeout }) => {
+			if (!session.isConnected) return notConnectedError();
+			const abort = new AbortController();
+			const timeoutMs = clampTimeout(timeout);
+			const load = waitForPageLoad(relay, session, timeoutMs, abort.signal);
+			await sendCdpCommand(relay, session, 'Page.reload', {});
+			const loaded = await load;
+			if (!loaded) {
+				const currentUrl = await readLocationHref(relay, session);
+				return {
+					content: [
+						{
+							type: 'text',
+							text: currentUrl
+								? `Timed out waiting for ${currentUrl} to reload.`
+								: 'Timed out waiting for the page to reload.',
+						},
+					],
+					isError: true,
+				};
+			}
+			session.onNavigation(session.activeTabId);
+			return { content: [{ type: 'text', text: 'Page reloaded.' }] };
+		},
+	);
 
 	server.registerTool(
 		'navigation_history',
