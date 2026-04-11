@@ -351,9 +351,9 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 					{
 						type: 'resource',
 						resource: {
-							uri: `data:application/pdf;base64,${result.data}`,
+							uri: 'file://clicker/generated.pdf',
 							mimeType: 'application/pdf',
-							text: result.data,
+							blob: result.data,
 						},
 					},
 				],
