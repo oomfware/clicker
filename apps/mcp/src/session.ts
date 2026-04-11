@@ -88,6 +88,37 @@ const MAX_CONSOLE_MESSAGES = 100;
 const MAX_JS_ERRORS = 50;
 const MAX_NETWORK_REQUESTS = 500;
 
+/** fixed-capacity circular buffer with O(1) push and oldest-first iteration */
+class RingBuffer<T> {
+	readonly capacity: number;
+	#items: T[] = [];
+	#head = 0;
+
+	constructor(capacity: number) {
+		this.capacity = capacity;
+	}
+
+	push(item: T): void {
+		if (this.#items.length < this.capacity) {
+			this.#items.push(item);
+		} else {
+			// overwrite oldest, advance head
+			this.#items[this.#head] = item;
+			this.#head = (this.#head + 1) % this.capacity;
+		}
+	}
+
+	/** returns items in insertion order (oldest first) */
+	toArray(): T[] {
+		if (this.#head === 0) return this.#items.slice();
+		return [...this.#items.slice(this.#head), ...this.#items.slice(0, this.#head)];
+	}
+
+	get size(): number {
+		return this.#items.length;
+	}
+}
+
 /** tracks state for the current MCP session */
 export class SessionState {
 	// #region binding state (set on connect_workspace, cleared on disconnect)
@@ -131,8 +162,8 @@ export class SessionState {
 	// #region per-tab runtime state
 
 	#refMap = new Map<string, RefEntry>();
-	#tabConsoleMessages = new Map<number, ConsoleMessage[]>();
-	#tabJsErrors = new Map<number, JsError[]>();
+	#tabConsoleMessages = new Map<number, RingBuffer<ConsoleMessage>>();
+	#tabJsErrors = new Map<number, RingBuffer<JsError>>();
 	#tabDialogs = new Map<number, DialogInfo>();
 	#networkRequests = new Map<string, NetworkRequest>();
 	#emulationState: EmulationState = {};
@@ -153,17 +184,14 @@ export class SessionState {
 		this.#tabDialogs.delete(tabId);
 	}
 
-	/** pushes an item into a per-tab capped buffer, evicting the oldest entry at capacity */
-	#bufferEntry<T>(map: Map<number, T[]>, tabId: number, entry: T, maxSize: number): void {
-		let list = map.get(tabId);
-		if (!list) {
-			list = [];
-			map.set(tabId, list);
+	/** pushes an item into a per-tab ring buffer, overwriting the oldest entry at capacity */
+	#bufferEntry<T>(map: Map<number, RingBuffer<T>>, tabId: number, entry: T, capacity: number): void {
+		let buf = map.get(tabId);
+		if (!buf) {
+			buf = new RingBuffer(capacity);
+			map.set(tabId, buf);
 		}
-		list.push(entry);
-		if (list.length > maxSize) {
-			list.shift();
-		}
+		buf.push(entry);
 	}
 
 	// #endregion
@@ -272,15 +300,17 @@ export class SessionState {
 	getConsoleMessages(tabId?: number, level?: string): ConsoleMessage[] {
 		const id = this.#resolveTabId(tabId);
 		if (id === null) return [];
-		const messages = this.#tabConsoleMessages.get(id) ?? [];
-		if (!level) return [...messages];
+		const buf = this.#tabConsoleMessages.get(id);
+		if (!buf) return [];
+		const messages = buf.toArray();
+		if (!level) return messages;
 		return messages.filter((m) => m.level === level);
 	}
 
 	getJsErrors(tabId?: number): JsError[] {
 		const id = this.#resolveTabId(tabId);
 		if (id === null) return [];
-		return [...(this.#tabJsErrors.get(id) ?? [])];
+		return this.#tabJsErrors.get(id)?.toArray() ?? [];
 	}
 
 	clearConsole(tabId?: number): void {
