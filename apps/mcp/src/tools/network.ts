@@ -141,7 +141,7 @@ export const registerNetworkTools = (
 		'list_network_requests',
 		{
 			description:
-				'List captured network requests. Network capture is always active for the current tab.',
+				'List captured network requests for the current tab. Capture is enabled when this session selects or connects to a tab, but restricted pages or target resets can still leave the buffer empty.',
 			inputSchema: {
 				resource_type: z
 					.enum(RESOURCE_TYPES)
