@@ -440,10 +440,7 @@ export const registerNavigationTools = (
 		{
 			description: 'Switch the active tab within the workspace for subsequent operations.',
 			inputSchema: {
-				tab_id: z
-					.number()
-					.optional()
-					.describe('Tab ID from status or list_tabs; omit to infer when unambiguous'),
+				tab_id: z.number().describe('Tab ID from status or list_tabs'),
 				foreground: z.boolean().default(false).describe('Also activate the Chrome tab in the browser UI'),
 			},
 		},
@@ -465,28 +462,7 @@ export const registerNavigationTools = (
 				return { content: [{ type: 'text', text: 'Workspace not found.' }], isError: true };
 			}
 
-			let targetTabId = tab_id;
-			if (targetTabId === undefined) {
-				const activeTabs = workspace.tabs.filter((tab) => tab.active);
-				if (activeTabs.length === 1) {
-					targetTabId = activeTabs[0].tabId;
-				} else if (workspace.tabs.length === 1) {
-					targetTabId = workspace.tabs[0].tabId;
-				}
-			}
-
-			if (targetTabId === undefined) {
-				const choices = workspace.tabs.map((tab) => `[${tab.tabId}] ${tab.title} (${tab.url})`).join('\n');
-				return {
-					content: [
-						{
-							type: 'text',
-							text: `Select a tab by id. Available tabs:\n${choices}`,
-						},
-					],
-					isError: true,
-				};
-			}
+			const targetTabId = tab_id;
 
 			if (!workspace.tabs.some((tab) => tab.tabId === targetTabId)) {
 				return {
@@ -531,9 +507,9 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'close_tab',
 		{
-			description: 'Close a tab in the workspace.',
+			description: 'Close a tab in the workspace by id.',
 			inputSchema: {
-				tab_id: z.number().optional().describe('Tab ID to close (closes the active tab if omitted)'),
+				tab_id: z.number().describe('Tab ID to close from status or list_tabs'),
 			},
 		},
 		async ({ tab_id }) => {
@@ -541,7 +517,7 @@ export const registerNavigationTools = (
 				return notConnectedError();
 			}
 
-			const targetTab = tab_id ?? session.activeTabId;
+			const targetTab = tab_id;
 			if (!targetTab) {
 				return { content: [{ type: 'text', text: 'No tab to close.' }], isError: true };
 			}
@@ -570,14 +546,14 @@ export const registerNavigationTools = (
 						content: [
 							{
 								type: 'text',
-								text: `Closed tab ${targetTab}. The active selection was cleared because the remaining tabs could not be refreshed.`,
+								text: `Closed tab ${targetTab}. The active selection was cleared because the remaining tabs could not be refreshed. Call list_tabs() before selecting the next tab.`,
 							},
 						],
 					};
 				}
 
 				const workspace = listResponse.payload.result.workspaces.find((ws) => ws.id === session.workspaceId);
-				const replacementTabId = workspace?.tabs.find((tab) => tab.active)?.tabId ?? workspace?.tabs[0]?.tabId;
+				const replacementTabId = workspace?.tabs.find((tab) => tab.active)?.tabId;
 				session.selectTab(replacementTabId);
 				if (replacementTabId !== undefined) {
 					enableNetworkForActiveTab(relay, session);
@@ -585,14 +561,14 @@ export const registerNavigationTools = (
 						content: [
 							{
 								type: 'text',
-								text: `Closed tab ${targetTab}. Selected tab ${replacementTabId} for subsequent commands.`,
+								text: `Closed tab ${targetTab}. Selected Chrome's active tab ${replacementTabId} for subsequent commands.`,
 							},
 						],
 					};
 				}
 			}
 
-			return { content: [{ type: 'text', text: `Closed tab ${targetTab}.` }] };
+			return { content: [{ type: 'text', text: `Closed tab ${targetTab}. No tab is currently selected.` }] };
 		},
 	);
 };
