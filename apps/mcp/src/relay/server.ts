@@ -33,7 +33,7 @@ const startHeartbeat = (ws: WebSocket, send: () => void) => {
 	let missedPongs = 0;
 	const interval = setInterval(() => {
 		missedPongs++;
-		if (missedPongs > MISSED_PONG_LIMIT) {
+		if (missedPongs >= MISSED_PONG_LIMIT) {
 			clearInterval(interval);
 			ws.close(WS_CLOSE_HEARTBEAT_TIMEOUT, 'heartbeat_timeout');
 			return;
