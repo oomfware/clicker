@@ -934,7 +934,7 @@ export const registerStateTools = (
 	server.registerTool(
 		'evaluate',
 		{
-			description: 'Run JavaScript in the active tab or element and return the result.',
+			description: 'Run JavaScript and return the result.',
 			inputSchema: {
 				expression: z.string().describe('JavaScript expression to evaluate'),
 				ref: z.string().optional().describe('Element ref from snapshot; the element is bound as `this`'),
@@ -958,7 +958,7 @@ export const registerStateTools = (
 					'Runtime.callFunctionOn',
 					{
 						objectId,
-						functionDeclaration: `function() { ${expression} }`,
+						functionDeclaration: `function() { return (${expression}); }`,
 						returnByValue: true,
 						awaitPromise: true,
 					},
