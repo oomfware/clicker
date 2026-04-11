@@ -141,7 +141,7 @@ export const registerNetworkTools = (
 		'list_network_requests',
 		{
 			description:
-				'List captured network requests for the current tab. Capture is enabled when this session selects or connects to a tab, but restricted pages or target resets can still leave the buffer empty.',
+				'List captured network requests for the selected tab since its last top-level navigation. Use status() or list_tabs() if you need a different tab.',
 			inputSchema: {
 				resource_type: z
 					.enum(RESOURCE_TYPES)
@@ -158,8 +158,14 @@ export const registerNetworkTools = (
 		},
 		async ({ resource_type, status_code, url_contains, failed_only, min_duration_ms, page_size, page_index }) => {
 			if (!session.isConnected) return notConnectedError();
+			if (session.activeTabId === null) {
+				return {
+					content: [{ type: 'text', text: 'No tab is currently selected. Use list_tabs() and select_tab().' }],
+					isError: true,
+				};
+			}
 
-			let requests = session.getNetworkRequests();
+			let requests = session.getNetworkRequests(session.activeTabId);
 
 			if (resource_type) {
 				requests = requests.filter((r) => r.resourceType === resource_type);
@@ -203,7 +209,7 @@ export const registerNetworkTools = (
 				);
 				const dur = t?.total ?? computeFallbackDuration(r);
 				const duration = dur !== undefined ? ` ${formatMs(dur)}` : '';
-				return `[${r.requestId}] ${r.method} ${status} ${r.url} (${r.resourceType}${size}${duration})`;
+				return `[${r.id}] ${r.method} ${status} ${r.url} (${r.resourceType}${size}${duration})`;
 			});
 
 			if (total > requests.length) {
@@ -218,9 +224,9 @@ export const registerNetworkTools = (
 	server.registerTool(
 		'get_network_request',
 		{
-			description: 'Get full details of a specific network request by its ID.',
+			description: 'Get full details of a specific network request from list_network_requests.',
 			inputSchema: {
-				request_id: z.string().describe('Request ID from list_network_requests output'),
+				request_id: z.string().describe('Request ID from list_network_requests output (for example 123:ABCDEF)'),
 				include_body: z.boolean().default(false).describe('Fetch and include the response body'),
 			},
 			annotations: { readOnlyHint: true },
@@ -287,7 +293,7 @@ export const registerNetworkTools = (
 				try {
 					// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 					const result = (await sendCdpCommand(relay, session, 'Network.getResponseBody', {
-						requestId: request_id,
+						requestId: req.requestId,
 					})) as { body: string; base64Encoded: boolean };
 
 					if (result.base64Encoded) {

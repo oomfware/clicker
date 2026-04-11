@@ -47,6 +47,7 @@ export interface ResourceTiming {
 }
 
 export interface NetworkRequest {
+	id: string;
 	requestId: string;
 	url: string;
 	method: string;
@@ -166,6 +167,10 @@ export class SessionState {
 	#tabJsErrors = new Map<number, RingBuffer<JsError>>();
 	#tabDialogs = new Map<number, DialogInfo>();
 	#networkRequests = new Map<string, NetworkRequest>();
+
+	#networkRequestId(tabId: number, requestId: string): string {
+		return `${tabId}:${requestId}`;
+	}
 	#emulationState: EmulationState = {};
 
 	#resolveTabId(tabId?: number): number | null {
@@ -182,6 +187,7 @@ export class SessionState {
 		this.#tabConsoleMessages.delete(tabId);
 		this.#tabJsErrors.delete(tabId);
 		this.#tabDialogs.delete(tabId);
+		this.clearNetworkRequests(tabId);
 	}
 
 	/** pushes an item into a per-tab ring buffer, overwriting the oldest entry at capacity */
@@ -350,29 +356,30 @@ export class SessionState {
 	updateNetworkRequest(
 		requestId: string,
 		tabId: number,
-		update: Partial<Omit<NetworkRequest, 'tabId'>>,
+		update: Partial<Omit<NetworkRequest, 'id' | 'requestId' | 'tabId'>>,
 	): void {
-		const existing = this.#networkRequests.get(requestId);
+		const id = this.#networkRequestId(tabId, requestId);
+		const existing = this.#networkRequests.get(id);
 		if (existing) {
 			Object.assign(existing, update);
-		} else {
-			// evict oldest if at capacity
-			if (this.#networkRequests.size >= MAX_NETWORK_REQUESTS) {
-				const firstKey = this.#networkRequests.keys().next().value;
-				if (firstKey !== undefined) {
-					this.#networkRequests.delete(firstKey);
-				}
-			}
-			this.#networkRequests.set(requestId, {
-				requestId,
-				url: '',
-				method: '',
-				resourceType: '',
-				tabId,
-				timestamp: 0,
-				...update,
-			});
+			return;
 		}
+		if (this.#networkRequests.size >= MAX_NETWORK_REQUESTS) {
+			const firstKey = this.#networkRequests.keys().next().value;
+			if (firstKey !== undefined) {
+				this.#networkRequests.delete(firstKey);
+			}
+		}
+		this.#networkRequests.set(id, {
+			id,
+			requestId,
+			url: '',
+			method: '',
+			resourceType: '',
+			tabId,
+			timestamp: 0,
+			...update,
+		});
 	}
 
 	/** returns network requests, optionally filtered to a specific tab */
@@ -382,12 +389,20 @@ export class SessionState {
 		return all.filter((r) => r.tabId === tabId);
 	}
 
-	getNetworkRequest(requestId: string): NetworkRequest | undefined {
-		return this.#networkRequests.get(requestId);
+	getNetworkRequest(id: string): NetworkRequest | undefined {
+		return this.#networkRequests.get(id);
 	}
 
-	clearNetworkRequests(): void {
-		this.#networkRequests.clear();
+	clearNetworkRequests(tabId?: number): void {
+		if (tabId === undefined) {
+			this.#networkRequests.clear();
+			return;
+		}
+		for (const [id, request] of this.#networkRequests) {
+			if (request.tabId === tabId) {
+				this.#networkRequests.delete(id);
+			}
+		}
 	}
 
 	// #endregion
