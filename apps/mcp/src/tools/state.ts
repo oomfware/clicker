@@ -405,7 +405,7 @@ const resolveIframeFrameId = async (
 	}
 };
 
-// #region cursor-interactive detection
+// #region element detection
 
 /**
  * JS source evaluated in the page to find elements that are visually interactive
