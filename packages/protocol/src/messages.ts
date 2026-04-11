@@ -6,6 +6,7 @@ import { browserStatusSchema, workspaceSchema, workspaceTabSchema } from './work
 // #region result schema helper
 
 /** creates a discriminated `{ ok: true, ... } | { ok: false, error: string }` union */
+/*#__NO_SIDE_EFFECTS__*/
 const resultSchema = <T extends v.ObjectEntries>(successFields: T) =>
 	v.variant('ok', [
 		v.object({ ok: v.literal(true), ...successFields }),
@@ -326,6 +327,7 @@ export const parseSessionToRelayMessage = makeParser(sessionToRelaySchema);
 export const parseRelayToSessionMessage = makeParser(relayToSessionSchema);
 
 /** creates a message envelope with a unique ID and timestamp */
+/*#__NO_SIDE_EFFECTS__*/
 export const createEnvelope = <T>(payload: T) => ({
 	id: createMessageId(),
 	ts: Date.now(),
