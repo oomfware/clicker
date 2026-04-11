@@ -3,8 +3,7 @@ import { z } from 'zod';
 
 import { sendCdpCommand } from '../cdp.ts';
 import type { RelayConnection } from '../connection.ts';
-import type { NetworkRequest, ResourceTiming } from '../session.ts';
-import type { SessionState } from '../session.ts';
+import type { NetworkRequest, ResourceTiming, SessionState } from '../session.ts';
 
 import { notConnectedError } from './shared.ts';
 
