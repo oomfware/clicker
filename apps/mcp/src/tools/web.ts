@@ -168,33 +168,82 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 			if (domain) params.domain = domain;
 			if (path) params.path = path;
 
-			// delete without partition key (handles unpartitioned cookies)
-			await sendCdpCommand(relay, session, 'Network.deleteCookies', params);
-
-			// also delete with a derived partition key to handle Chrome's
-			// cookie partitioning — without this, cookies stored in a
-			// partition silently survive the first delete
-			let topLevelSite: string | undefined;
-			if (url) {
-				try {
-					const u = new URL(url);
-					topLevelSite = `${u.protocol}//${u.hostname}`;
-				} catch {
-					// invalid URL — skip partitioned delete
+			// verify what matches before deletion so the response reflects what this tool can actually observe.
+			// this avoids claiming success for partitioned cookies we cannot target reliably without the exact key.
+			// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+			const before = (await sendCdpCommand(relay, session, 'Network.getCookies', url ? { urls: [url] } : {})) as {
+				cookies: Array<{
+					name: string;
+					domain: string;
+					path: string;
+					partitionKey?: unknown;
+				}>;
+			};
+			const matches = before.cookies.filter((cookie) => {
+				if (cookie.name !== name) {
+					return false;
 				}
-			} else if (domain) {
-				const host = domain.startsWith('.') ? domain.slice(1) : domain;
-				topLevelSite = `https://${host}`;
+				if (domain !== undefined && cookie.domain !== domain) {
+					return false;
+				}
+				if (path !== undefined && cookie.path !== path) {
+					return false;
+				}
+				if (url) {
+					try {
+						const targetUrl = new URL(url);
+						const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+						if (targetUrl.hostname !== host && !targetUrl.hostname.endsWith(`.${host}`)) {
+							return false;
+						}
+						if (!targetUrl.pathname.startsWith(cookie.path)) {
+							return false;
+						}
+					} catch {
+						return false;
+					}
+				}
+				return true;
+			});
+
+			if (matches.length === 0) {
+				return {
+					content: [{ type: 'text', text: `No matching cookies found for "${name}".` }],
+					isError: true,
+				};
 			}
 
-			if (topLevelSite) {
-				await sendCdpCommand(relay, session, 'Network.deleteCookies', {
-					...params,
-					partitionKey: { topLevelSite, hasCrossSiteAncestor: false },
-				});
+			const unpartitioned = matches.filter((cookie) => !cookie.partitionKey);
+			const partitioned = matches.length - unpartitioned.length;
+
+			await Promise.all(
+				unpartitioned.map(async (cookie) => {
+					await sendCdpCommand(relay, session, 'Network.deleteCookies', {
+						name: cookie.name,
+						domain: cookie.domain,
+						path: cookie.path,
+					});
+				}),
+			);
+
+			const deleted = unpartitioned.length;
+			if (deleted === matches.length) {
+				return { content: [{ type: 'text', text: `Deleted ${deleted} cookie${deleted === 1 ? '' : 's'} named "${name}".` }] };
 			}
 
-			return { content: [{ type: 'text', text: `Cookie "${name}" deleted.` }] };
+			const warnings: string[] = [];
+			if (deleted > 0) {
+				warnings.push(`deleted ${deleted} unpartitioned cookie${deleted === 1 ? '' : 's'}`);
+			}
+			if (partitioned > 0) {
+				warnings.push(
+					`${partitioned} partitioned cookie${partitioned === 1 ? '' : 's'} may remain because Chrome requires the exact partition key to delete them`,
+				);
+			}
+			return {
+				content: [{ type: 'text', text: `${warnings.join('; ')}.` }],
+				isError: true,
+			};
 		},
 	);
 
