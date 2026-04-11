@@ -122,6 +122,11 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				}
 				break;
 			}
+			case 'Page.navigatedWithinDocument': {
+				if (eventSessionId) break;
+				session.onNavigation(tabId);
+				break;
+			}
 
 			// network events are buffered only from the active tab
 			case 'Network.requestWillBeSent': {

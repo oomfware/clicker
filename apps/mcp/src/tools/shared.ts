@@ -378,6 +378,7 @@ export const waitForStabilization = (
 			if (
 				method === 'Page.loadEventFired' ||
 				method === 'Page.frameNavigated' ||
+				method === 'Page.navigatedWithinDocument' ||
 				method === 'Page.javascriptDialogOpening'
 			) {
 				eventSeen = true;
