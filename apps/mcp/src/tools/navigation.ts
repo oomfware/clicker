@@ -562,9 +562,34 @@ export const registerNavigationTools = (
 				};
 			}
 
-			// if we closed the active tab, clear selection so the next command doesn't target a dead tab
 			if (targetTab === session.activeTabId) {
-				session.selectTab(undefined);
+				const listResponse = await relay.request({ type: 'workspace:list', connectionId: session.connectionId! });
+				if (listResponse.payload.type !== 'workspace:state' || !listResponse.payload.result.ok) {
+					session.selectTab(undefined);
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `Closed tab ${targetTab}. The active selection was cleared because the remaining tabs could not be refreshed.`,
+							},
+						],
+					};
+				}
+
+				const workspace = listResponse.payload.result.workspaces.find((ws) => ws.id === session.workspaceId);
+				const replacementTabId = workspace?.tabs.find((tab) => tab.active)?.tabId ?? workspace?.tabs[0]?.tabId;
+				session.selectTab(replacementTabId);
+				if (replacementTabId !== undefined) {
+					enableNetworkForActiveTab(relay, session);
+					return {
+						content: [
+							{
+								type: 'text',
+								text: `Closed tab ${targetTab}. Selected tab ${replacementTabId} for subsequent commands.`,
+							},
+						],
+					};
+				}
 			}
 
 			return { content: [{ type: 'text', text: `Closed tab ${targetTab}.` }] };
