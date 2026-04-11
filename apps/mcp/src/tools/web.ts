@@ -121,7 +121,29 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 				}
 			}
 
-			await sendCdpCommand(relay, session, 'Network.setCookie', params);
+			// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+			const result = (await sendCdpCommand(relay, session, 'Network.setCookie', params)) as {
+				success: boolean;
+				blockedReasons?: string[];
+				exemptionReason?: string;
+			};
+			if (!result.success) {
+				const reasons = [
+					...(result.blockedReasons ?? []),
+					...(result.exemptionReason ? [result.exemptionReason] : []),
+				].join(', ');
+				return {
+					content: [
+						{
+							type: 'text',
+							text: reasons
+								? `Cookie "${name}" was not set: ${reasons}`
+								: `Cookie "${name}" was not set.`,
+						},
+					],
+					isError: true,
+				};
+			}
 			return { content: [{ type: 'text', text: `Cookie "${name}" set.` }] };
 		},
 	);
