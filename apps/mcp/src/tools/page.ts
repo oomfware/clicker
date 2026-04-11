@@ -64,14 +64,11 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'wait_for_text',
 		{
-			description: 'Wait for text to appear or disappear on the page.',
+			description: 'Wait for page text.',
 			inputSchema: {
 				text: z.string().describe('Text to wait for'),
-				condition: z
-					.enum(['present', 'absent'])
-					.default('present')
-					.describe('Wait for the text to be present or absent'),
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds (1000-120000)'),
+				condition: z.enum(['present', 'absent']).default('present').describe('Target state'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ text, condition, timeout }) => {
@@ -107,14 +104,11 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'wait_for_url',
 		{
-			description: 'Wait for the page URL to match or stop matching a substring.',
+			description: 'Wait for the current URL.',
 			inputSchema: {
 				url: z.string().describe('URL substring to wait for'),
-				condition: z
-					.enum(['present', 'absent'])
-					.default('present')
-					.describe('Wait for the URL to match or stop matching'),
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds (1000-120000)'),
+				condition: z.enum(['present', 'absent']).default('present').describe('Target state'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ url, condition, timeout }) => {
@@ -150,15 +144,11 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'wait_for_selector',
 		{
-			description:
-				'Wait for a CSS selector to reach a specific state. Prefer wait_for_text for simple text checks.',
+			description: 'Wait for a CSS selector.',
 			inputSchema: {
 				selector: z.string().describe('CSS selector to wait for'),
-				state: z
-					.enum(['attached', 'detached', 'visible', 'hidden'])
-					.default('visible')
-					.describe('Target state for the element'),
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds (1000-120000)'),
+				state: z.enum(['attached', 'detached', 'visible', 'hidden']).default('visible').describe('Target state'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ selector, state, timeout }) => {
@@ -214,11 +204,10 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'wait_for_function',
 		{
-			description:
-				'Evaluate a JS expression repeatedly until it returns a truthy value. The expression should be side-effect free.',
+			description: 'Wait for a JavaScript condition.',
 			inputSchema: {
-				expression: z.string().describe('JS expression to evaluate (should be side-effect free)'),
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds (1000-120000)'),
+				expression: z.string().describe('JavaScript expression to evaluate'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ expression, timeout }) => {
@@ -248,13 +237,12 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'handle_dialog',
 		{
-			description:
-				'Accept, dismiss, or check the status of a browser dialog (alert, confirm, prompt, beforeunload).',
+			description: 'Inspect or handle a pending dialog.',
 			inputSchema: {
 				action: z
 					.enum(['accept', 'dismiss', 'status'])
-					.describe('Accept/dismiss the dialog, or check if one is pending'),
-				prompt_text: z.string().optional().describe('Text to enter for prompt dialogs'),
+					.describe('What to do with the dialog'),
+				prompt_text: z.string().optional().describe('Prompt text'),
 			},
 		},
 		async ({ action, prompt_text }) => {
@@ -297,16 +285,15 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'scroll',
 		{
-			description:
-				'Scroll the page or a specific element by pixel deltas. Positive delta_y scrolls content up (reveals below), negative scrolls content down. Use wheel=true for infinite-scroll pages.',
+			description: 'Scroll the page or a scrollable element.',
 			inputSchema: {
 				delta_x: z.number().default(0).describe('Horizontal scroll delta in pixels'),
 				delta_y: z.number().default(0).describe('Vertical scroll delta in pixels'),
-				ref: z.string().optional().describe('Ref of a scrollable element; scrolls the page if omitted'),
+				ref: z.string().optional().describe('Scrollable element ref from snapshot(); omit for the page'),
 				wheel: z
 					.boolean()
 					.default(false)
-					.describe('Dispatch mouse wheel events instead of JS scrollBy (triggers wheel listeners)'),
+					.describe('Use wheel input instead of JavaScript scrolling'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -396,9 +383,9 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'select',
 		{
-			description: 'Select an option in a dropdown (<select> element) by its ref.',
+			description: 'Choose an option in a native select element.',
 			inputSchema: {
-				ref: z.string().describe('Ref of the select element'),
+				ref: z.string().describe('Select element ref from snapshot()'),
 				value: z.string().optional().describe('Option value to select'),
 				label: z.string().optional().describe('Option label (visible text) to select'),
 				include_snapshot: includeSnapshotSchema,
@@ -472,13 +459,13 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'console',
 		{
-			description: 'Read buffered browser console messages and JS errors.',
+			description: 'Read buffered console output and JavaScript errors.',
 			inputSchema: {
-				tab_id: z.number().optional().describe('Tab ID to read from (defaults to active tab)'),
+				tab_id: z.number().optional().describe('Tab ID; defaults to the selected tab'),
 				level: z
 					.enum(['all', 'log', 'warn', 'error', 'info', 'debug'])
 					.default('all')
-					.describe('Filter by console message level'),
+					.describe('Console level filter'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -520,9 +507,9 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 	server.registerTool(
 		'clear_console',
 		{
-			description: 'Clear buffered console messages and JS errors.',
+			description: 'Clear buffered console output and JavaScript errors.',
 			inputSchema: {
-				tab_id: z.number().optional().describe('Tab ID to clear (defaults to active tab)'),
+				tab_id: z.number().optional().describe('Tab ID; defaults to the selected tab'),
 			},
 		},
 		async ({ tab_id }) => {

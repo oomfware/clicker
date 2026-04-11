@@ -162,13 +162,10 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'navigate',
 		{
-			description: 'Navigate to a URL. Auto-handles beforeunload dialogs.',
+			description: 'Navigate within the current workspace.',
 			inputSchema: {
 				url: z.string().describe('URL to navigate to'),
-				target: z
-					.enum(['current', 'foreground_tab', 'background_tab'])
-					.default('current')
-					.describe('Where to open the URL: current tab, new active tab, or new background tab'),
+				target: z.enum(['current', 'foreground_tab', 'background_tab']).default('current').describe('Where to open the page'),
 				timeout: z
 					.number()
 					.default(TOOL_TIMEOUT_DEFAULT)
@@ -280,9 +277,9 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'go_back',
 		{
-			description: 'Navigate the active tab back in history.',
+			description: 'Go back in history.',
 			inputSchema: {
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Navigation timeout in milliseconds (1000-120000)'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ timeout }) => {
@@ -311,9 +308,9 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'go_forward',
 		{
-			description: 'Navigate the active tab forward in history.',
+			description: 'Go forward in history.',
 			inputSchema: {
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Navigation timeout in milliseconds (1000-120000)'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ timeout }) => {
@@ -344,9 +341,9 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'reload',
 		{
-			description: 'Reload the active tab.',
+			description: 'Reload the current page.',
 			inputSchema: {
-				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Reload timeout in milliseconds (1000-120000)'),
+				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
 		async ({ timeout }) => {
@@ -378,7 +375,7 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'navigation_history',
 		{
-			description: 'Show the back/forward navigation history for the active tab.',
+			description: 'Show navigation history.',
 			annotations: { readOnlyHint: true },
 		},
 		async () => {
@@ -407,8 +404,7 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'list_tabs',
 		{
-			description:
-				'List all tabs in the current workspace. Shortcut for checking tabs when already connected — status() provides the same information plus more context.',
+			description: 'List tabs in the current workspace.',
 			annotations: { readOnlyHint: true },
 		},
 		async () => {
@@ -438,10 +434,10 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'select_tab',
 		{
-			description: 'Switch the active tab within the workspace for subsequent operations.',
+			description: 'Select a tab for subsequent commands.',
 			inputSchema: {
-				tab_id: z.number().describe('Tab ID from status or list_tabs'),
-				foreground: z.boolean().default(false).describe('Also activate the Chrome tab in the browser UI'),
+				tab_id: z.number().describe('Tab ID from status() or list_tabs()'),
+				foreground: z.boolean().default(false).describe('Also activate the tab in the browser UI'),
 			},
 		},
 		async ({ tab_id, foreground }) => {
@@ -507,9 +503,9 @@ export const registerNavigationTools = (
 	server.registerTool(
 		'close_tab',
 		{
-			description: 'Close a tab in the workspace by id.',
+			description: 'Close a tab.',
 			inputSchema: {
-				tab_id: z.number().describe('Tab ID to close from status or list_tabs'),
+				tab_id: z.number().describe('Tab ID from status() or list_tabs()'),
 			},
 		},
 		async ({ tab_id }) => {

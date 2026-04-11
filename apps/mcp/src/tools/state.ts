@@ -820,20 +820,19 @@ export const registerStateTools = (
 	server.registerTool(
 		'snapshot',
 		{
-			description:
-				'Capture the accessibility tree of the active tab. Interactive elements are assigned refs (e.g. e1, e2) for use with interaction tools like click, fill, and hover. Prefer this over screenshot — it is faster, text-based, and provides the refs needed for interaction. Refs are invalidated by navigation, reload, or tab switch.',
+			description: 'Capture an accessibility snapshot for interaction and inspection. Prefer this over screenshot unless visual appearance matters.',
 			inputSchema: {
 				interactive_only: z
 					.boolean()
 					.default(false)
-					.describe('Show only interactive elements, while preserving enough structure to navigate them'),
-				compact: z.boolean().default(false).describe('Reduce text-heavy noise in the snapshot output'),
+					.describe('Show only interactive elements while preserving useful structure'),
+				compact: z.boolean().default(false).describe('Reduce text-heavy noise'),
 				max_depth: z
 					.number()
 					.int()
 					.positive()
 					.optional()
-					.describe('Limit rendering depth in the accessibility tree'),
+					.describe('Maximum tree depth'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -851,14 +850,13 @@ export const registerStateTools = (
 	server.registerTool(
 		'screenshot',
 		{
-			description:
-				'Capture a visual screenshot. Only use when visual appearance matters (e.g. verifying layout, styling, or visual content like images and charts that are not in the accessibility tree). For reading page content, finding elements, or driving interaction, always use snapshot instead.',
+			description: 'Capture a visual screenshot. Prefer snapshot unless you need visual appearance, layout, or non-accessible content.',
 			inputSchema: {
 				full_page: z
 					.boolean()
 					.default(false)
-					.describe('Capture the full scrollable page instead of just the viewport'),
-				ref: z.string().optional().describe('Ref of an element to screenshot (overrides full_page)'),
+					.describe('Capture the full scrollable page'),
+				ref: z.string().optional().describe('Element ref from snapshot(); overrides full_page'),
 				format: z.enum(['png', 'jpeg', 'webp']).default('png').describe('Image format'),
 				quality: z.number().min(0).max(100).optional().describe('Compression quality for jpeg/webp (0-100)'),
 			},
@@ -934,10 +932,10 @@ export const registerStateTools = (
 	server.registerTool(
 		'evaluate',
 		{
-			description: 'Run JavaScript and return the result.',
+			description: 'Evaluate JavaScript and return the result.',
 			inputSchema: {
-				expression: z.string().describe('JavaScript expression to evaluate'),
-				ref: z.string().optional().describe('Element ref from snapshot; the element is bound as `this`'),
+				expression: z.string().describe('JavaScript expression'),
+				ref: z.string().optional().describe('Element ref from snapshot(); bound as `this`'),
 			},
 		},
 		async ({ expression, ref }) => {
@@ -990,25 +988,22 @@ export const registerStateTools = (
 	server.registerTool(
 		'emulate',
 		{
-			description:
-				'Override viewport, DPR, mobile layout, user-agent, touch, and color scheme for device testing. Only provided fields are changed; omitted fields keep their previous values. Use reset=true to clear device overrides only (geo/timezone has its own reset via emulate_location).',
+			description: 'Apply device emulation overrides.',
 			inputSchema: {
 				width: z.number().optional().describe('Viewport width in pixels'),
 				height: z.number().optional().describe('Viewport height in pixels'),
-				device_scale_factor: z.number().optional().describe('Device pixel ratio (default 1)'),
+				device_scale_factor: z.number().optional().describe('Device pixel ratio'),
 				mobile: z
 					.boolean()
 					.optional()
-					.describe(
-						'Enable mobile layout engine (viewport meta handling, overlay scrollbars). Independent from touch.',
-					),
-				user_agent: z.string().optional().describe('User-Agent string override'),
-				color_scheme: z.enum(['light', 'dark']).optional().describe('Emulated color scheme preference'),
+					.describe('Enable mobile layout behavior'),
+				user_agent: z.string().optional().describe('User-Agent override'),
+				color_scheme: z.enum(['light', 'dark']).optional().describe('Color scheme override'),
 				touch: z
 					.boolean()
 					.optional()
-					.describe('Enable touch input emulation. Independent from mobile layout.'),
-				reset: z.boolean().default(false).describe('Clear device emulation overrides'),
+					.describe('Enable touch input emulation'),
+				reset: z.boolean().default(false).describe('Clear device overrides'),
 			},
 		},
 		async ({ width, height, device_scale_factor, mobile, user_agent, color_scheme, touch, reset }) => {
@@ -1114,16 +1109,15 @@ export const registerStateTools = (
 	server.registerTool(
 		'emulate_location',
 		{
-			description:
-				'Override geolocation and timezone for location-dependent testing. Call with reset=true to clear.',
+			description: 'Apply location and timezone overrides.',
 			inputSchema: {
-				latitude: z.number().optional().describe('Latitude override'),
-				longitude: z.number().optional().describe('Longitude override'),
+				latitude: z.number().optional().describe('Latitude'),
+				longitude: z.number().optional().describe('Longitude'),
 				timezone: z
 					.string()
 					.optional()
-					.describe('Timezone ID override (e.g. America/New_York, Europe/London)'),
-				reset: z.boolean().default(false).describe('Clear geolocation and timezone overrides'),
+					.describe('Timezone ID'),
+				reset: z.boolean().default(false).describe('Clear location overrides'),
 			},
 		},
 		async ({ latitude, longitude, timezone, reset }) => {

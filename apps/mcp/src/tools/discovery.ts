@@ -16,10 +16,9 @@ export const registerDiscoveryTools = (
 	server.registerTool(
 		'status',
 		{
-			description:
-				'Show connected browsers, their workspaces, and tabs, plus current session state. Call this first to discover targets, then connect_workspace() or create_workspace() to bind.',
+			description: 'Show available browsers, workspaces, and tabs.',
 			inputSchema: {
-				browser_id: z.string().optional().describe('Filter to a specific browser by its connection ID'),
+				browser_id: z.string().optional().describe('Browser ID from status()'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -65,11 +64,10 @@ export const registerDiscoveryTools = (
 	server.registerTool(
 		'create_workspace',
 		{
-			description:
-				'Create a new workspace (tab group) in a browser and connect to it. The new workspace becomes the active session target.',
+			description: 'Create and connect to a new workspace.',
 			inputSchema: {
-				browser_id: z.string().describe('Browser connection ID from status'),
-				title: z.string().describe('A short name for the workspace; ask the user if unclear'),
+				browser_id: z.string().describe('Browser ID from status()'),
+				title: z.string().describe('Workspace title'),
 			},
 		},
 		async ({ browser_id, title }) => {
@@ -114,10 +112,9 @@ export const registerDiscoveryTools = (
 	server.registerTool(
 		'connect_workspace',
 		{
-			description:
-				'Connect this session to an existing workspace. Use status() first to find the workspace ID.',
+			description: 'Connect to an existing workspace.',
 			inputSchema: {
-				workspace_id: z.string().describe('Workspace ID from status'),
+				workspace_id: z.string().describe('Workspace ID from status()'),
 			},
 		},
 		async ({ workspace_id }) => {
@@ -153,10 +150,9 @@ export const registerDiscoveryTools = (
 	server.registerTool(
 		'destroy_workspace',
 		{
-			description:
-				'Close all tabs in a workspace and destroy it. Unbinds the session if the destroyed workspace was the current one.',
+			description: 'Destroy a workspace.',
 			inputSchema: {
-				workspace_id: z.string().describe('Workspace ID to destroy'),
+				workspace_id: z.string().describe('Workspace ID from status()'),
 			},
 		},
 		async ({ workspace_id }) => {

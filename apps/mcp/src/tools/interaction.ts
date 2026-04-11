@@ -381,10 +381,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'click',
 		{
-			description:
-				'Click a snapshot ref. Auto-scrolls into view if needed. Use button="right" for context menus.',
+			description: 'Click an element.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				double_click: z.boolean().default(false).describe('Double-click instead of single click'),
 				button: z.enum(['left', 'right', 'middle']).default('left').describe('Mouse button to click'),
 				include_snapshot: includeSnapshotSchema,
@@ -409,10 +408,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'type',
 		{
-			description:
-				'Type text into the focused element. Use click, focus, or fill to focus first. Handles \\n as Enter and \\t as Tab.',
+			description: 'Type into the focused element.',
 			inputSchema: {
-				text: z.string().describe('Text to type (\\n for Enter, \\t for Tab)'),
+				text: z.string().describe('Text to type'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -431,9 +429,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'fill',
 		{
-			description: 'Clear an input field and type new text. Prefer over type when replacing the full value.',
+			description: 'Replace the current value of an editable element.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				value: z.string().describe('Text to fill in'),
 				include_snapshot: includeSnapshotSchema,
 			},
@@ -491,9 +489,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'hover',
 		{
-			description: 'Hover over an element by its ref. Auto-scrolls into view if needed.',
+			description: 'Move the pointer over an element.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -518,10 +516,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'press',
 		{
-			description:
-				'Press a key or combo (e.g. Enter, Tab, Escape, ArrowDown, Control+A, Shift+Enter). Supports all US keyboard keys.',
+			description: 'Send a key press or key combo.',
 			inputSchema: {
-				key: z.string().describe('Key or combo (e.g. Enter, Tab, Control+A, Shift+Enter, a, 1, /)'),
+				key: z.string().describe('Key or key combo'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -540,9 +537,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'check',
 		{
-			description: 'Check a checkbox or toggle a switch on. No-op if already checked.',
+			description: 'Turn a checkbox or switch on.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -552,9 +549,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'uncheck',
 		{
-			description: 'Uncheck a checkbox or toggle a switch off. No-op if already unchecked.',
+			description: 'Turn a checkbox or switch off.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -564,10 +561,10 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'drag',
 		{
-			description: 'Drag one element onto another by their refs.',
+			description: 'Drag one element onto another.',
 			inputSchema: {
-				from_ref: z.string().describe('Ref of the element to drag'),
-				to_ref: z.string().describe('Ref of the drop target'),
+				from_ref: z.string().describe('Source element ref from snapshot()'),
+				to_ref: z.string().describe('Target element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -600,10 +597,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'scroll_into_view',
 		{
-			description:
-				'Scroll an element into the center of the viewport. Most interaction tools auto-scroll; use this for explicit scroll control.',
+			description: 'Scroll an element into view.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -632,9 +628,9 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'focus',
 		{
-			description: 'Focus an element without clicking it. Useful for triggering focus-dependent UI.',
+			description: 'Focus an element.',
 			inputSchema: {
-				ref: z.string().describe('Ref from snapshot (e.g. e1)'),
+				ref: z.string().describe('Element ref from snapshot()'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
@@ -664,10 +660,10 @@ export const registerInteractionTools = (
 	server.registerTool(
 		'upload_file',
 		{
-			description: 'Upload a file to a file input element by ref.',
+			description: 'Set files on a file input.',
 			inputSchema: {
-				ref: z.string().describe('Ref of the file input element'),
-				path: z.string().describe('Absolute path to the file on the local machine'),
+				ref: z.string().describe('File input ref from snapshot()'),
+				path: z.string().describe('Absolute file path'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},

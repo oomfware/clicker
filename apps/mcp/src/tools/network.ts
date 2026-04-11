@@ -140,18 +140,14 @@ export const registerNetworkTools = (
 	server.registerTool(
 		'list_network_requests',
 		{
-			description:
-				'List captured network requests for the selected tab since its last top-level navigation. Use status() or list_tabs() if you need a different tab.',
+			description: 'List captured network requests for the selected tab.',
 			inputSchema: {
-				resource_type: z
-					.enum(RESOURCE_TYPES)
-					.optional()
-					.describe('Filter by resource type'),
-				status_code: z.number().optional().describe('Filter by exact HTTP status code'),
-				url_contains: z.string().optional().describe('Filter by URL substring'),
+				resource_type: z.enum(RESOURCE_TYPES).optional().describe('Resource type filter'),
+				status_code: z.number().optional().describe('HTTP status filter'),
+				url_contains: z.string().optional().describe('URL substring filter'),
 				failed_only: z.boolean().default(false).describe('Show only failed requests'),
-				min_duration_ms: z.number().optional().describe('Minimum request duration in ms'),
-				page_size: z.number().default(50).describe('Maximum number of requests per page'),
+				min_duration_ms: z.number().optional().describe('Minimum duration filter in milliseconds'),
+				page_size: z.number().default(50).describe('Maximum number of results'),
 				page_index: z.number().default(0).describe('Zero-based page index'),
 			},
 			annotations: { readOnlyHint: true },
@@ -224,10 +220,10 @@ export const registerNetworkTools = (
 	server.registerTool(
 		'get_network_request',
 		{
-			description: 'Get full details of a specific network request from list_network_requests.',
+			description: 'Show the details of a captured network request.',
 			inputSchema: {
-				request_id: z.string().describe('Request ID from list_network_requests output (for example 123:ABCDEF)'),
-				include_body: z.boolean().default(false).describe('Fetch and include the response body'),
+				request_id: z.string().describe('Request ID from list_network_requests()'),
+				include_body: z.boolean().default(false).describe('Include the response body when available'),
 			},
 			annotations: { readOnlyHint: true },
 		},

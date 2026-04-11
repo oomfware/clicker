@@ -34,9 +34,9 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 	server.registerTool(
 		'get_cookies',
 		{
-			description: 'Get browser cookies for the current page or a specific URL.',
+			description: 'List cookies.',
 			inputSchema: {
-				urls: z.array(z.string()).optional().describe('URLs to get cookies for (defaults to current page)'),
+				urls: z.array(z.string()).optional().describe('URLs to read from; defaults to the current page'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -80,11 +80,11 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 	server.registerTool(
 		'set_cookie',
 		{
-			description: 'Set a browser cookie.',
+			description: 'Set a cookie.',
 			inputSchema: {
 				name: z.string().describe('Cookie name'),
 				value: z.string().describe('Cookie value'),
-				url: z.string().optional().describe('URL to associate the cookie with (defaults to current page)'),
+				url: z.string().optional().describe('Associated URL; defaults to the current page'),
 				domain: z.string().optional().describe('Cookie domain'),
 				path: z.string().optional().describe('Cookie path'),
 				secure: z.boolean().optional().describe('Secure flag'),
@@ -151,10 +151,9 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 	server.registerTool(
 		'delete_cookies',
 		{
-			description:
-				'Delete browser cookies by name. Requires at least a name. Use domain/url/path to narrow scope when multiple cookies share the same name.',
+			description: 'Delete matching cookies.',
 			inputSchema: {
-				name: z.string().describe('Cookie name to delete'),
+				name: z.string().describe('Cookie name'),
 				url: z.string().optional().describe('URL scope for deletion'),
 				domain: z.string().optional().describe('Domain scope for deletion'),
 				path: z.string().optional().describe('Path scope for deletion'),
@@ -254,10 +253,10 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 	server.registerTool(
 		'get_storage',
 		{
-			description: 'Read a value from localStorage or sessionStorage.',
+			description: 'Read web storage.',
 			inputSchema: {
-				key: z.string().optional().describe('Storage key to read (lists all keys if omitted)'),
-				storage: z.enum(['local', 'session']).default('local').describe('Which storage to read from'),
+				key: z.string().optional().describe('Storage key; omit to list all keys'),
+				storage: z.enum(['local', 'session']).default('local').describe('Storage area'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -295,11 +294,11 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 	server.registerTool(
 		'set_storage',
 		{
-			description: 'Write a value to localStorage or sessionStorage.',
+			description: 'Write web storage.',
 			inputSchema: {
 				key: z.string().describe('Storage key'),
 				value: z.string().describe('Value to store'),
-				storage: z.enum(['local', 'session']).default('local').describe('Which storage to write to'),
+				storage: z.enum(['local', 'session']).default('local').describe('Storage area'),
 			},
 		},
 		async ({ key, value, storage }) => {
@@ -325,11 +324,11 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 		{
 			description: 'Generate a PDF of the current page.',
 			inputSchema: {
-				landscape: z.boolean().default(false).describe('Use landscape orientation'),
+				landscape: z.boolean().default(false).describe('Landscape orientation'),
 				print_background: z.boolean().default(true).describe('Include background graphics'),
-				scale: z.number().default(1).describe('Scale of the page rendering (0.1-2.0)'),
-				paper_width: z.number().optional().describe('Paper width in inches (default 8.5)'),
-				paper_height: z.number().optional().describe('Paper height in inches (default 11)'),
+				scale: z.number().default(1).describe('Render scale'),
+				paper_width: z.number().optional().describe('Paper width in inches'),
+				paper_height: z.number().optional().describe('Paper height in inches'),
 			},
 		},
 		async ({ landscape, print_background, scale, paper_width, paper_height }) => {
