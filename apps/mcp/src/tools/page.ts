@@ -479,11 +479,10 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 					.enum(['all', 'log', 'warn', 'error', 'info', 'debug'])
 					.default('all')
 					.describe('Filter by console message level'),
-				clear: z.boolean().default(false).describe('Clear the buffer after reading'),
 			},
 			annotations: { readOnlyHint: true },
 		},
-		async ({ tab_id, level, clear }) => {
+		async ({ tab_id, level }) => {
 			if (!session.isConnected) return notConnectedError();
 			const messages = session.getConsoleMessages(tab_id, level === 'all' ? undefined : level);
 			const errors = session.getJsErrors(tab_id);
@@ -514,12 +513,23 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 				lines.push('No console messages or errors.');
 			}
 
-			if (clear) {
-				session.clearConsole(tab_id);
-				session.clearErrors(tab_id);
-			}
-
 			return { content: [{ type: 'text', text: lines.join('\n') }] };
+		},
+	);
+
+	server.registerTool(
+		'clear_console',
+		{
+			description: 'Clear buffered console messages and JS errors.',
+			inputSchema: {
+				tab_id: z.number().optional().describe('Tab ID to clear (defaults to active tab)'),
+			},
+		},
+		async ({ tab_id }) => {
+			if (!session.isConnected) return notConnectedError();
+			session.clearConsole(tab_id);
+			session.clearErrors(tab_id);
+			return { content: [{ type: 'text', text: 'Console and error buffers cleared.' }] };
 		},
 	);
 
