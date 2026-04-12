@@ -165,7 +165,10 @@ export const registerNavigationTools = (
 			description: 'Navigate within the current workspace.',
 			inputSchema: {
 				url: z.string().describe('URL to navigate to'),
-				target: z.enum(['current', 'foreground_tab', 'background_tab']).default('current').describe('Where to open the page'),
+				target: z
+					.enum(['current', 'foreground_tab', 'background_tab'])
+					.default('current')
+					.describe('Where to open the page'),
 				timeout: z
 					.number()
 					.default(TOOL_TIMEOUT_DEFAULT)
@@ -535,7 +538,10 @@ export const registerNavigationTools = (
 			}
 
 			if (targetTab === session.activeTabId) {
-				const listResponse = await relay.request({ type: 'workspace:list', connectionId: session.connectionId! });
+				const listResponse = await relay.request({
+					type: 'workspace:list',
+					connectionId: session.connectionId!,
+				});
 				if (listResponse.payload.type !== 'workspace:state' || !listResponse.payload.result.ok) {
 					session.selectTab(undefined);
 					return {

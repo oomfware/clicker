@@ -820,19 +820,15 @@ export const registerStateTools = (
 	server.registerTool(
 		'snapshot',
 		{
-			description: 'Capture an accessibility snapshot for interaction and inspection. Prefer this over screenshot unless visual appearance matters.',
+			description:
+				'Capture an accessibility snapshot for interaction and inspection. Prefer this over screenshot unless visual appearance matters.',
 			inputSchema: {
 				interactive_only: z
 					.boolean()
 					.default(false)
 					.describe('Show only interactive elements while preserving useful structure'),
 				compact: z.boolean().default(false).describe('Reduce text-heavy noise'),
-				max_depth: z
-					.number()
-					.int()
-					.positive()
-					.optional()
-					.describe('Maximum tree depth'),
+				max_depth: z.number().int().positive().optional().describe('Maximum tree depth'),
 			},
 			annotations: { readOnlyHint: true },
 		},
@@ -850,12 +846,10 @@ export const registerStateTools = (
 	server.registerTool(
 		'screenshot',
 		{
-			description: 'Capture a visual screenshot. Prefer snapshot unless you need visual appearance, layout, or non-accessible content.',
+			description:
+				'Capture a visual screenshot. Prefer snapshot unless you need visual appearance, layout, or non-accessible content.',
 			inputSchema: {
-				full_page: z
-					.boolean()
-					.default(false)
-					.describe('Capture the full scrollable page'),
+				full_page: z.boolean().default(false).describe('Capture the full scrollable page'),
 				ref: z.string().optional().describe('Element ref from snapshot(); overrides full_page'),
 				format: z.enum(['png', 'jpeg', 'webp']).default('png').describe('Image format'),
 				quality: z.number().min(0).max(100).optional().describe('Compression quality for jpeg/webp (0-100)'),
@@ -993,16 +987,10 @@ export const registerStateTools = (
 				width: z.number().optional().describe('Viewport width in pixels'),
 				height: z.number().optional().describe('Viewport height in pixels'),
 				device_scale_factor: z.number().optional().describe('Device pixel ratio'),
-				mobile: z
-					.boolean()
-					.optional()
-					.describe('Enable mobile layout behavior'),
+				mobile: z.boolean().optional().describe('Enable mobile layout behavior'),
 				user_agent: z.string().optional().describe('User-Agent override'),
 				color_scheme: z.enum(['light', 'dark']).optional().describe('Color scheme override'),
-				touch: z
-					.boolean()
-					.optional()
-					.describe('Enable touch input emulation'),
+				touch: z.boolean().optional().describe('Enable touch input emulation'),
 				reset: z.boolean().default(false).describe('Clear device overrides'),
 			},
 		},
@@ -1113,10 +1101,7 @@ export const registerStateTools = (
 			inputSchema: {
 				latitude: z.number().optional().describe('Latitude'),
 				longitude: z.number().optional().describe('Longitude'),
-				timezone: z
-					.string()
-					.optional()
-					.describe('Timezone ID'),
+				timezone: z.string().optional().describe('Timezone ID'),
 				reset: z.boolean().default(false).describe('Clear location overrides'),
 			},
 		},

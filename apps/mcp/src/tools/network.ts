@@ -152,11 +152,21 @@ export const registerNetworkTools = (
 			},
 			annotations: { readOnlyHint: true },
 		},
-		async ({ resource_type, status_code, url_contains, failed_only, min_duration_ms, page_size, page_index }) => {
+		async ({
+			resource_type,
+			status_code,
+			url_contains,
+			failed_only,
+			min_duration_ms,
+			page_size,
+			page_index,
+		}) => {
 			if (!session.isConnected) return notConnectedError();
 			if (session.activeTabId === null) {
 				return {
-					content: [{ type: 'text', text: 'No tab is currently selected. Use list_tabs() and select_tab().' }],
+					content: [
+						{ type: 'text', text: 'No tab is currently selected. Use list_tabs() and select_tab().' },
+					],
 					isError: true,
 				};
 			}
@@ -191,7 +201,14 @@ export const registerNetworkTools = (
 			requests = requests.slice(start, start + page_size);
 
 			if (requests.length === 0) {
-				return { content: [{ type: 'text', text: total > 0 ? 'No requests on this page.' : 'No matching network requests captured.' }] };
+				return {
+					content: [
+						{
+							type: 'text',
+							text: total > 0 ? 'No requests on this page.' : 'No matching network requests captured.',
+						},
+					],
+				};
 			}
 
 			const lines = requests.map((r) => {

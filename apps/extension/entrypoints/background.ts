@@ -393,6 +393,7 @@ export default defineBackground(async () => {
 			default: {
 				// oxlint-disable-next-line no-unused-vars -- compile-time exhaustiveness check
 				const _exhaustive: never = msg;
+				return false;
 			}
 		}
 	});

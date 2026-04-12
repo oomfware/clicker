@@ -136,9 +136,7 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 					content: [
 						{
 							type: 'text',
-							text: reasons
-								? `Cookie "${name}" was not set: ${reasons}`
-								: `Cookie "${name}" was not set.`,
+							text: reasons ? `Cookie "${name}" was not set: ${reasons}` : `Cookie "${name}" was not set.`,
 						},
 					],
 					isError: true,
@@ -170,7 +168,12 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 			// verify what matches before deletion so the response reflects what this tool can actually observe.
 			// this avoids claiming success for partitioned cookies we cannot target reliably without the exact key.
 			// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
-			const before = (await sendCdpCommand(relay, session, 'Network.getCookies', url ? { urls: [url] } : {})) as {
+			const before = (await sendCdpCommand(
+				relay,
+				session,
+				'Network.getCookies',
+				url ? { urls: [url] } : {},
+			)) as {
 				cookies: Array<{
 					name: string;
 					domain: string;
@@ -227,7 +230,11 @@ export const registerWebTools = (server: McpServer, relay: RelayConnection, sess
 
 			const deleted = unpartitioned.length;
 			if (deleted === matches.length) {
-				return { content: [{ type: 'text', text: `Deleted ${deleted} cookie${deleted === 1 ? '' : 's'} named "${name}".` }] };
+				return {
+					content: [
+						{ type: 'text', text: `Deleted ${deleted} cookie${deleted === 1 ? '' : 's'} named "${name}".` },
+					],
+				};
 			}
 
 			const warnings: string[] = [];

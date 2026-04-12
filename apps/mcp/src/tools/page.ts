@@ -147,7 +147,10 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 			description: 'Wait for a CSS selector.',
 			inputSchema: {
 				selector: z.string().describe('CSS selector to wait for'),
-				state: z.enum(['attached', 'detached', 'visible', 'hidden']).default('visible').describe('Target state'),
+				state: z
+					.enum(['attached', 'detached', 'visible', 'hidden'])
+					.default('visible')
+					.describe('Target state'),
 				timeout: z.number().default(TOOL_TIMEOUT_DEFAULT).describe('Timeout in milliseconds'),
 			},
 		},
@@ -239,9 +242,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 		{
 			description: 'Inspect or handle a pending dialog.',
 			inputSchema: {
-				action: z
-					.enum(['accept', 'dismiss', 'status'])
-					.describe('What to do with the dialog'),
+				action: z.enum(['accept', 'dismiss', 'status']).describe('What to do with the dialog'),
 				prompt_text: z.string().optional().describe('Prompt text'),
 			},
 		},
@@ -290,10 +291,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 				delta_x: z.number().default(0).describe('Horizontal scroll delta in pixels'),
 				delta_y: z.number().default(0).describe('Vertical scroll delta in pixels'),
 				ref: z.string().optional().describe('Scrollable element ref from snapshot(); omit for the page'),
-				wheel: z
-					.boolean()
-					.default(false)
-					.describe('Use wheel input instead of JavaScript scrolling'),
+				wheel: z.boolean().default(false).describe('Use wheel input instead of JavaScript scrolling'),
 				include_snapshot: includeSnapshotSchema,
 			},
 		},
