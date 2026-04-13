@@ -926,13 +926,17 @@ export const registerStateTools = (
 	server.registerTool(
 		'evaluate',
 		{
-			description: 'Evaluate JavaScript and return the result.',
+			description: 'Run a JavaScript function body in the page and return its result.',
 			inputSchema: {
-				expression: z.string().describe('JavaScript expression'),
+				function_body: z
+					.string()
+					.describe(
+						'JavaScript function body. Use statements and explicitly return a JSON-serializable value. May use await.',
+					),
 				ref: z.string().optional().describe('Element ref from snapshot(); bound as `this`'),
 			},
 		},
-		async ({ expression, ref }) => {
+		async ({ function_body, ref }) => {
 			if (!session.isConnected) return notConnectedError();
 
 			type EvalResult = {
@@ -950,7 +954,7 @@ export const registerStateTools = (
 					'Runtime.callFunctionOn',
 					{
 						objectId,
-						functionDeclaration: `function() { return (${expression}); }`,
+						functionDeclaration: `async function() {\n${function_body}\n}`,
 						returnByValue: true,
 						awaitPromise: true,
 					},
@@ -959,7 +963,7 @@ export const registerStateTools = (
 			} else {
 				// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 				result = (await sendCdpCommand(relay, session, 'Runtime.evaluate', {
-					expression,
+					expression: `(async function() {\n${function_body}\n})()`,
 					returnByValue: true,
 					awaitPromise: true,
 				})) as EvalResult;
