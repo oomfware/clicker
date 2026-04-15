@@ -42,7 +42,7 @@ const parser = or(
 
 const result = run(parser, {
 	programName: 'clicker',
-	help: 'both',
+	help: { command: true, option: true },
 	brief: message`browser automation for AI agents`,
 });
 

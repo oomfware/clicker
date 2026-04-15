@@ -43,11 +43,11 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
       '@optique/core':
-        specifier: ^0.10.7
-        version: 0.10.7
+        specifier: ^1.0.0
+        version: 1.0.0
       '@optique/run':
-        specifier: ^0.10.7
-        version: 0.10.7
+        specifier: ^1.0.0
+        version: 1.0.0
       ws:
         specifier: ^8.20.0
         version: 8.20.0
@@ -357,12 +357,12 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@optique/core@0.10.7':
-    resolution: {integrity: sha512-FwSX8ILFqzcCqZi6Xetsa4flJp/yyqFG4d4eFD98BtqdzxxuylzdrKvsXj/ow8mcoVjYkTuaIkqHSBxonqMcQg==}
+  '@optique/core@1.0.0':
+    resolution: {integrity: sha512-8h2GgREAQl4vGFUWLxqZQty4rg36FAlMvcAHPMGEAL5IUR97qSRZohtI99vwoQ6eHIRBOyF/krnMQZGPFyoNVw==}
     engines: {bun: '>=1.2.0', deno: '>=2.3.0', node: '>=20.0.0'}
 
-  '@optique/run@0.10.7':
-    resolution: {integrity: sha512-1CVdH8uyptj1nFGS2MLacSmZceRClez4LD/G/Gm38wrAVnJq6I+9Fvyh2bVHErsZLQzR0a12CYMUWIgDKY3X1w==}
+  '@optique/run@1.0.0':
+    resolution: {integrity: sha512-QQywmuYmCWBYaok+MTL1c+NwGHzeUrV7AsMqiWYnRKcAxGmAhKKfdY2Hofq321fZWgqOpGBGGCW8YDGEr3zhmw==}
     engines: {bun: '>=1.2.0', deno: '>=2.3.0', node: '>=20.0.0'}
 
   '@oxc-project/types@0.124.0':
@@ -2758,11 +2758,11 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@optique/core@0.10.7': {}
+  '@optique/core@1.0.0': {}
 
-  '@optique/run@0.10.7':
+  '@optique/run@1.0.0':
     dependencies:
-      '@optique/core': 0.10.7
+      '@optique/core': 1.0.0
 
   '@oxc-project/types@0.124.0': {}
 
