@@ -19,7 +19,7 @@
 		"@oomfware/clicker-protocol": "workspace:*",
 		"@types/node": "^25.6.0",
 		"@types/ws": "^8.18.1",
-		"tsdown": "^0.21.7",
+		"tsdown": "^0.21.8",
 		"typescript": "^6.0.2"
 	}
 }

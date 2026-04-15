@@ -474,12 +474,12 @@ const CURSOR_DETECTION_JS = `(function() {
  * @param frameId optional iframe frame ID to scope detection
  * @returns map keyed by `frameId:backendNodeId`
  */
-const detectElements = async <TMeta, TResult>(
+const detectElements = async <TResult>(
 	relay: RelayConnection,
 	session: SessionState,
 	jsExpression: string,
 	metaExtractor: string,
-	mapper: (meta: TMeta, backendNodeId: number) => TResult | undefined,
+	mapper: (meta: unknown, backendNodeId: number) => TResult | undefined,
 	frameId?: string,
 ): Promise<Map<string, TResult>> => {
 	const map = new Map<string, TResult>();
@@ -515,7 +515,7 @@ const detectElements = async <TMeta, TResult>(
 				returnByValue: true,
 			},
 			target,
-		)) as { result: { value?: TMeta[] } };
+		)) as { result: { value?: unknown[] } };
 
 		const metas = metaResult.result.value ?? [];
 		if (metas.length === 0) return map;
@@ -620,14 +620,16 @@ const CURSOR_META_EXTRACTOR = `function() {
 	});
 }`;
 
-const cursorMapper = (meta: CursorMeta, _backendNodeId: number): CursorInteractiveInfo => {
-	const kind = meta.hasClick || meta.hasCursor ? 'clickable' : meta.isEdit ? 'editable' : 'focusable';
+const cursorMapper = (meta: unknown, _backendNodeId: number): CursorInteractiveInfo => {
+	// oxlint-disable-next-line no-unsafe-type-assertion -- shape guaranteed by CURSOR_META_EXTRACTOR
+	const m = meta as CursorMeta;
+	const kind = m.hasClick || m.hasCursor ? 'clickable' : m.isEdit ? 'editable' : 'focusable';
 	const hints: string[] = [];
-	if (meta.hasCursor) hints.push('cursor:pointer');
-	if (meta.hasClick) hints.push('onclick');
-	if (meta.hasTab) hints.push('tabindex');
-	if (meta.isEdit) hints.push('contenteditable');
-	return { kind, hints, text: meta.text };
+	if (m.hasCursor) hints.push('cursor:pointer');
+	if (m.hasClick) hints.push('onclick');
+	if (m.hasTab) hints.push('tabindex');
+	if (m.isEdit) hints.push('contenteditable');
+	return { kind, hints, text: m.text };
 };
 
 /** finds cursor-interactive elements and resolves their backendNodeIds */
@@ -714,10 +716,12 @@ const SCROLL_META_EXTRACTOR = `function() {
 	});
 }`;
 
-const scrollMapper = (meta: ScrollMeta, _backendNodeId: number): ScrollContainerInfo => {
+const scrollMapper = (meta: unknown, _backendNodeId: number): ScrollContainerInfo => {
+	// oxlint-disable-next-line no-unsafe-type-assertion -- shape guaranteed by SCROLL_META_EXTRACTOR
+	const m = meta as ScrollMeta;
 	const axes: ('x' | 'y')[] = [];
-	if (meta.sX) axes.push('x');
-	if (meta.sY) axes.push('y');
+	if (m.sX) axes.push('x');
+	if (m.sY) axes.push('y');
 	return { axes };
 };
 
