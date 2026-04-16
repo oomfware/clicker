@@ -299,7 +299,7 @@ export class RelayState {
 	addPending(id: string, callbacks: PendingCallbacks, meta: PendingMeta = {}): void {
 		const timer = setTimeout(() => {
 			this.#pending.delete(id);
-			callbacks.reject(new Error('request timed out'));
+			callbacks.reject(new Error('clicker request timed out waiting for the extension to respond'));
 		}, REQUEST_TIMEOUT);
 
 		this.#pending.set(id, { ...callbacks, timer, ...meta });

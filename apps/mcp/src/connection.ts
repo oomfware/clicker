@@ -84,7 +84,7 @@ export class RelayConnection extends EventEmitter<RelayEvents> {
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.#pending.delete(full.id);
-				reject(new Error('request timed out'));
+				reject(new Error('clicker request timed out waiting for the extension to respond'));
 			}, REQUEST_TIMEOUT);
 
 			this.#pending.set(full.id, { resolve, reject, timer });
