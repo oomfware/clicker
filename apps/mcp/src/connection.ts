@@ -20,6 +20,17 @@ import WebSocket from 'ws';
 
 class VersionMismatchError extends Error {}
 
+/** one-line summary of an outbound request used in timeout error messages */
+const describeRequest = (payload: SessionToRelayMessage['payload']): string => {
+	if (payload.type === 'cdp:command') {
+		const parts = [`cdp:command method=${payload.method}`];
+		if (payload.tabId !== undefined) parts.push(`tab=${payload.tabId}`);
+		if (payload.frameId) parts.push(`frame=${payload.frameId}`);
+		return parts.join(' ');
+	}
+	return payload.type;
+};
+
 interface PendingRequest {
 	resolve: (value: RelayToSessionMessage) => void;
 	reject: (reason: Error) => void;
@@ -84,7 +95,11 @@ export class RelayConnection extends EventEmitter<RelayEvents> {
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.#pending.delete(full.id);
-				reject(new Error('clicker request timed out waiting for the extension to respond'));
+				reject(
+					new Error(
+						`clicker request timed out waiting for the extension to respond (${describeRequest(payload)}, ${REQUEST_TIMEOUT}ms)`,
+					),
+				);
 			}, REQUEST_TIMEOUT);
 
 			this.#pending.set(full.id, { resolve, reject, timer });

@@ -14,6 +14,19 @@ export interface CdpCommandTarget {
 	frameId?: string;
 }
 
+/** builds a short `[method, tab=N, frame=F, Xms]` suffix for CDP error messages */
+const describeCdpContext = (
+	method: string,
+	tabId: number | undefined,
+	frameId: string | undefined,
+	ms: number,
+): string => {
+	const parts = [method, `tab=${tabId ?? 'none'}`];
+	if (frameId) parts.push(`frame=${frameId}`);
+	parts.push(`${ms}ms`);
+	return `[${parts.join(', ')}]`;
+};
+
 /** sends a CDP command and returns the result; targets `tabId` if given, otherwise the active tab */
 export const sendCdpCommand = async (
 	relay: RelayConnection,
@@ -35,21 +48,33 @@ export const sendCdpCommand = async (
 		);
 	}
 
-	const response = await relay.request({
-		type: 'cdp:command',
-		workspaceId: session.workspaceId,
-		tabId: tabId ?? session.activeTabId ?? undefined,
-		frameId,
-		method,
-		params: params ?? {},
-	});
+	const effectiveTabId = tabId ?? session.activeTabId ?? undefined;
+	const started = performance.now();
+
+	let response;
+	try {
+		response = await relay.request({
+			type: 'cdp:command',
+			workspaceId: session.workspaceId,
+			tabId: effectiveTabId,
+			frameId,
+			method,
+			params: params ?? {},
+		});
+	} catch (err) {
+		const elapsed = Math.round(performance.now() - started);
+		const context = describeCdpContext(method, effectiveTabId, frameId, elapsed);
+		throw new Error(`${err instanceof Error ? err.message : String(err)} ${context}`, { cause: err });
+	}
 
 	if (response.payload.type !== 'cdp:result') {
 		throw new Error('Unexpected response from relay');
 	}
 
 	if (!response.payload.result.ok) {
-		throw new Error(response.payload.result.error);
+		const elapsed = Math.round(performance.now() - started);
+		const context = describeCdpContext(method, effectiveTabId, frameId, elapsed);
+		throw new Error(`${response.payload.result.error} ${context}`);
 	}
 
 	return response.payload.result.value;
