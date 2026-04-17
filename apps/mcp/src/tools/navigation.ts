@@ -148,9 +148,6 @@ const waitForNavigation = async (
 	]);
 
 	abort.abort();
-	if (result.outcome === 'navigated') {
-		session.onNavigation(session.activeTabId);
-	}
 	return result;
 };
 

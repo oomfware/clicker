@@ -113,18 +113,15 @@ export const handler = async (_args: { command: 'serve' }): Promise<void> => {
 				break;
 			}
 			case 'Page.frameNavigated': {
-				// clear per-tab state on top-level navigation only;
-				// ignore child session events (iframe navigations) and sub-frame navigations
+				// clear per-tab state on top-level cross-document navigation only.
+				// ignore child session events (iframe navigations) and sub-frame navigations.
+				// same-document navigations (history.pushState/replaceState) don't clear — React
+				// apps fire them constantly on focus/route changes and the DOM stays stable.
 				if (eventSessionId) break;
 				const frame = p.frame as { parentId?: string } | undefined;
 				if (!frame?.parentId) {
 					session.onNavigation(tabId);
 				}
-				break;
-			}
-			case 'Page.navigatedWithinDocument': {
-				if (eventSessionId) break;
-				session.onNavigation(tabId);
 				break;
 			}
 

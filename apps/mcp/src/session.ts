@@ -219,10 +219,13 @@ export class SessionState {
 
 	/**
 	 * switches the selected tab. clears refs (DOM-specific) but preserves
-	 * per-tab console, errors, and dialog state.
+	 * per-tab console, errors, and dialog state. no-ops when the tab is unchanged
+	 * so same-tab re-activation events don't invalidate refs.
 	 */
 	selectTab(tabId: number | undefined): void {
-		this.#activeTabId = tabId ?? null;
+		const next = tabId ?? null;
+		if (next === this.#activeTabId) return;
+		this.#activeTabId = next;
 		this.#lastInteractedFrameId = undefined;
 		this.#refMap.clear();
 	}
