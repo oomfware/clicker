@@ -9,11 +9,17 @@ import { startTabTracker, type TabIntent } from '../lib/tab-tracker.ts';
 import { WorkspaceManager, parseGroupTitle, resolveTabGroupColor } from '../lib/workspace-manager.ts';
 
 export default defineBackground(async () => {
-	// register onConnect before any async work so the listener is captured
-	// in the service worker's first turn of the event loop — connections
-	// that wake the worker during async init would otherwise be dropped
+	// all chrome.* listeners must be registered in the first synchronous turn
+	// of the service worker. events that wake the worker are only replayed to
+	// listeners already attached at that point; any added after an await may
+	// miss the event that woke the worker — causing flaky tab-group adoption
+	// when a drag wakes an idle worker.
+
 	const popupPorts = new Set<chrome.runtime.Port>();
 	let ready = false;
+	let currentName = '';
+	let error: PopupState['error'] | null = null;
+	let connection: RelayConnection | null = null;
 
 	chrome.runtime.onConnect.addListener((port) => {
 		if (port.name !== POPUP_PORT_NAME) return;
@@ -25,10 +31,6 @@ export default defineBackground(async () => {
 	});
 
 	const workspaces = new WorkspaceManager();
-	await workspaces.discover();
-
-	let currentName = await getExtensionName();
-	let error: PopupState['error'] | null = null;
 
 	const updateBadge = () => {
 		if (error) {
@@ -42,10 +44,12 @@ export default defineBackground(async () => {
 	// #region popup state push
 
 	const pushPopupState = () => {
+		// skip during init — currentName and connection aren't assigned yet
+		if (!ready) return;
 		if (popupPorts.size === 0) return;
 		const s: PopupState = {
 			name: currentName,
-			connected: connection.connected,
+			connected: connection?.connected ?? false,
 			error: error ?? undefined,
 			workspaces: workspaces.list(),
 		};
@@ -60,7 +64,7 @@ export default defineBackground(async () => {
 		onCdpEvent: (tabId, method, params, sessionId) => {
 			const workspaceId = workspaces.findByTabId(tabId);
 			if (!workspaceId) return;
-			connection.send({ type: 'cdp:event', workspaceId, tabId, method, params, sessionId });
+			connection?.send({ type: 'cdp:event', workspaceId, tabId, method, params, sessionId });
 		},
 		onDetached: (tabId, reason) => {
 			console.log(`debugger detached from tab ${tabId}: ${reason}`);
@@ -69,7 +73,13 @@ export default defineBackground(async () => {
 
 	// #region mutation queue
 
-	let mutationQueue: Promise<void> = Promise.resolve();
+	// seed the queue with discover() so events that wake the worker (and are
+	// enqueued by listeners registered synchronously below) wait for workspace
+	// discovery before they run. the .catch() ensures a discovery failure
+	// doesn't poison the chain and block all subsequent mutations.
+	let mutationQueue: Promise<void> = workspaces.discover().catch((err) => {
+		console.error('workspace discovery failed:', err);
+	});
 	let topologyDirty = false;
 
 	/** serializes a workspace mutation; emits a snapshot to relay and pushes popup state after */
@@ -77,7 +87,7 @@ export default defineBackground(async () => {
 		mutationQueue = mutationQueue
 			.then(fn)
 			.then(() => {
-				if (topologyDirty && connection.connected) {
+				if (topologyDirty && connection?.connected) {
 					connection.send({ type: 'workspace:sync', workspaces: workspaces.list() });
 					topologyDirty = false;
 				}
@@ -102,10 +112,10 @@ export default defineBackground(async () => {
 		if (!result) return;
 
 		markDirty();
-		connection.send({ type: 'tab:removed', workspaceId: result.workspaceId, tabId });
+		connection?.send({ type: 'tab:removed', workspaceId: result.workspaceId, tabId });
 		void debuggerBridge.detach(tabId);
 		if (result.workspaceRemoved) {
-			connection.send({
+			connection?.send({
 				type: 'workspace:destroyed',
 				workspaceId: result.workspaceId,
 				result: { ok: true },
@@ -119,7 +129,7 @@ export default defineBackground(async () => {
 		if (!added) return;
 
 		markDirty();
-		connection.send({
+		connection?.send({
 			type: 'tab:adopted',
 			workspaceId,
 			tabId,
@@ -136,7 +146,7 @@ export default defineBackground(async () => {
 		if (!removed) return;
 
 		markDirty();
-		connection.send({
+		connection?.send({
 			type: 'workspace:destroyed',
 			workspaceId: removed.workspaceId,
 			result: { ok: true },
@@ -172,7 +182,7 @@ export default defineBackground(async () => {
 					workspaces.updateTab(tabId, url, title);
 					const workspaceId = workspaces.findByTabId(tabId);
 					if (workspaceId) {
-						connection.send({ type: 'tab:updated', workspaceId, tabId, url, title });
+						connection?.send({ type: 'tab:updated', workspaceId, tabId, url, title });
 					}
 				}
 
@@ -200,7 +210,7 @@ export default defineBackground(async () => {
 							const workspace = await workspaces.adoptGroup(groupId, name, color);
 							if (workspace) {
 								markDirty();
-								connection.send({ type: 'workspace:created', result: { ok: true, workspace } });
+								connection?.send({ type: 'workspace:created', result: { ok: true, workspace } });
 								void debuggerBridge.attachAll(workspace.tabs.map((t) => t.tabId)).catch((err) => {
 									console.warn('failed to attach debugger to adopted workspace tabs:', err);
 								});
@@ -217,7 +227,7 @@ export default defineBackground(async () => {
 				workspaces.setTabActive(intent.tabId, true);
 				const workspaceId = workspaces.findByTabId(intent.tabId);
 				if (workspaceId) {
-					connection.send({ type: 'tab:active-changed', workspaceId, tabId: intent.tabId });
+					connection?.send({ type: 'tab:active-changed', workspaceId, tabId: intent.tabId });
 				}
 				break;
 			}
@@ -232,7 +242,7 @@ export default defineBackground(async () => {
 					const workspace = await workspaces.adoptGroup(groupId, name, color);
 					if (workspace) {
 						markDirty();
-						connection.send({ type: 'workspace:created', result: { ok: true, workspace } });
+						connection?.send({ type: 'workspace:created', result: { ok: true, workspace } });
 						void debuggerBridge.attachAll(workspace.tabs.map((t) => t.tabId)).catch((err) => {
 							console.warn('failed to attach debugger to adopted workspace tabs:', err);
 						});
@@ -258,7 +268,7 @@ export default defineBackground(async () => {
 					const workspaceId = workspaces.findByGroupId(groupId);
 					workspaces.updateGroup(groupId, name, color);
 					if (workspaceId) {
-						connection.send({ type: 'workspace:updated', workspaceId, title: name });
+						connection?.send({ type: 'workspace:updated', workspaceId, title: name });
 					}
 				}
 				break;
@@ -273,9 +283,18 @@ export default defineBackground(async () => {
 
 	// #endregion
 
+	// register tab/group listeners synchronously, before any await. events
+	// that wake the worker are enqueued and run after discover() completes
+	// (discover seeds the mutation queue above).
+	startTabTracker((intent) => {
+		enqueue(() => processTabIntent(intent));
+	});
+
 	// #region relay connection
 
-	const connection = new RelayConnection(currentName, {
+	currentName = await getExtensionName();
+
+	connection = new RelayConnection(currentName, {
 		onConnect: (connectionId) => {
 			console.log(`connected to relay: ${connectionId}`);
 			error = null;
@@ -293,7 +312,7 @@ export default defineBackground(async () => {
 					if (!custom) {
 						void regenerateName().then((name) => {
 							currentName = name;
-							connection.reconnectWithName(name);
+							connection?.reconnectWithName(name);
 						});
 						return;
 					}
@@ -317,17 +336,13 @@ export default defineBackground(async () => {
 			enqueue(() =>
 				handleRelayMessage(msg, workspaces, debuggerBridge, (payload) => {
 					markDirty();
-					connection.send(payload);
+					connection?.send(payload);
 				}),
 			);
 		},
 	});
 
 	// #endregion
-
-	startTabTracker((intent) => {
-		enqueue(() => processTabIntent(intent));
-	});
 
 	updateBadge();
 	connection.start();
@@ -353,7 +368,7 @@ export default defineBackground(async () => {
 				pushPopupState();
 				void setExtensionName(name)
 					.then(() => {
-						connection.reconnectWithName(name);
+						connection?.reconnectWithName(name);
 						sendResponse({ ok: true });
 					})
 					.catch((err) => {
@@ -381,7 +396,7 @@ export default defineBackground(async () => {
 							console.warn(`failed to attach debugger to tab ${tab.id}:`, err);
 						});
 
-						connection.send({ type: 'workspace:created', result: { ok: true, workspace } });
+						connection?.send({ type: 'workspace:created', result: { ok: true, workspace } });
 						sendResponse({ ok: true });
 					} catch (err) {
 						sendResponse({ ok: false, error: formatError(err) });
