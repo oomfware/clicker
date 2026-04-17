@@ -896,10 +896,7 @@ export const registerStateTools = (
 
 			if (ref) {
 				const entry = session.resolveRef(ref);
-				if (!entry?.backendDOMNodeId) {
-					return { content: [{ type: 'text', text: `Unknown ref "${ref}".` }], isError: true };
-				}
-				if (entry.frameId) {
+				if (entry?.frameId) {
 					return {
 						content: [
 							{
@@ -910,9 +907,10 @@ export const registerStateTools = (
 						isError: true,
 					};
 				}
+				const { backendDOMNodeId } = await resolveRefToRemoteObject(relay, session, ref);
 				// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 				const box = (await sendCdpCommand(relay, session, 'DOM.getBoxModel', {
-					backendNodeId: entry.backendDOMNodeId,
+					backendNodeId: backendDOMNodeId,
 				})) as { model: { content: number[] } };
 				const q = box.model.content;
 				const minX = Math.min(q[0], q[2], q[4], q[6]);

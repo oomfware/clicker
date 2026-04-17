@@ -52,30 +52,103 @@ export const maybeSnapshot = async (
 
 // #region element resolution
 
-/** resolves a ref, throwing if unknown or missing DOM node */
-export const resolveRefEntry = (
-	session: SessionState,
-	ref: string,
-): RefEntry & { backendDOMNodeId: number } => {
+/** resolves a ref to its entry, throwing only if the ref id is unknown */
+export const resolveRefEntry = (session: SessionState, ref: string): RefEntry => {
 	const entry = session.resolveRef(ref);
 	if (!entry)
 		throw new Error(
-			`Unknown ref "${ref}". Refs are created by snapshot() and cleared on navigation, reload, or tab switch. Call snapshot() to get fresh refs.`,
+			`Unknown ref "${ref}". Refs are created by snapshot() and cleared on cross-document navigation, reload, or tab switch. Call snapshot() to get fresh refs.`,
 		);
-	if (!entry.backendDOMNodeId) throw new Error(`Ref "${ref}" has no associated DOM node.`);
-	// oxlint-disable-next-line no-unsafe-type-assertion -- narrowed by guard above
-	return entry as typeof entry & { backendDOMNodeId: number };
+	return entry;
 };
 
-/** resolves a ref to its remote object ID and frame context */
+/** raw CDP AXNode fields we care about for role/name matching */
+interface AxMatchNode {
+	ignored?: boolean;
+	role?: { value?: unknown };
+	name?: { value?: unknown };
+	backendDOMNodeId?: number;
+}
+
+// oxlint-disable-next-line no-misleading-character-class -- matches the snapshot sanitizer
+const INVISIBLE_CHARS_REFRESH = /[\uFEFF\u200B\u200C\u200D\u2060\u00A0]/g;
+
+const axString = (value: unknown): string => {
+	if (typeof value === 'string') return value.replace(INVISIBLE_CHARS_REFRESH, '');
+	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+	return '';
+};
+
+/**
+ * re-locates a stale ref by re-querying `Accessibility.getFullAXTree` in the ref's frame
+ * and finding the `nth` node whose role+name match the stored entry. updates just that
+ * entry's `backendDOMNodeId` in place — does not touch the rest of the ref map.
+ *
+ * @throws if the ref's role/name/nth no longer resolves, typically because the element
+ * was removed or a real navigation happened that wasn't observed.
+ */
+export const refreshRefInPlace = async (
+	relay: RelayConnection,
+	session: SessionState,
+	ref: string,
+): Promise<RefEntry & { backendDOMNodeId: number }> => {
+	const entry = resolveRefEntry(session, ref);
+	const { role, name, frameId } = entry;
+	const nthTarget = entry.nth ?? 0;
+
+	let tree: { nodes: AxMatchNode[] };
+	try {
+		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
+		tree = (await sendCdpCommand(relay, session, 'Accessibility.getFullAXTree', frameId ? { frameId } : {}, {
+			frameId,
+		})) as { nodes: AxMatchNode[] };
+	} catch (err) {
+		throw new Error(
+			`Ref "${ref}" could not be refreshed (frame may have navigated or detached). Run snapshot() to get fresh refs.`,
+			{ cause: err },
+		);
+	}
+
+	let matched = 0;
+	for (const node of tree.nodes) {
+		if (node.ignored) continue;
+		if (axString(node.role?.value) !== role) continue;
+		if (axString(node.name?.value) !== name) continue;
+		if (matched === nthTarget) {
+			if (node.backendDOMNodeId == null) break;
+			session.patchRef(ref, { backendDOMNodeId: node.backendDOMNodeId });
+			// oxlint-disable-next-line no-unsafe-type-assertion -- narrowed by backendDOMNodeId guard above
+			return session.resolveRef(ref) as RefEntry & { backendDOMNodeId: number };
+		}
+		matched++;
+	}
+
+	throw new Error(
+		`Ref "${ref}" is no longer in the DOM (role=${JSON.stringify(role)}, name=${JSON.stringify(name)}). Run snapshot() to refresh.`,
+	);
+};
+
+/** resolves a ref to its remote object ID and frame context, refreshing stale nodes in place */
 export const resolveRefToRemoteObject = async (
 	relay: RelayConnection,
 	session: SessionState,
 	ref: string,
 ): Promise<{ objectId: string; frameId?: string; backendDOMNodeId: number }> => {
 	const entry = resolveRefEntry(session, ref);
-	const objectId = await resolveNodeToObjectId(relay, session, entry.backendDOMNodeId, entry.frameId);
-	return { objectId, frameId: entry.frameId, backendDOMNodeId: entry.backendDOMNodeId };
+	const frameId = entry.frameId;
+
+	if (entry.backendDOMNodeId) {
+		try {
+			const objectId = await resolveNodeToObjectId(relay, session, entry.backendDOMNodeId, frameId);
+			return { objectId, frameId, backendDOMNodeId: entry.backendDOMNodeId };
+		} catch {
+			// fall through to refresh
+		}
+	}
+
+	const fresh = await refreshRefInPlace(relay, session, ref);
+	const objectId = await resolveNodeToObjectId(relay, session, fresh.backendDOMNodeId, frameId);
+	return { objectId, frameId, backendDOMNodeId: fresh.backendDOMNodeId };
 };
 
 /** extracts center coordinates from a box model content quad */

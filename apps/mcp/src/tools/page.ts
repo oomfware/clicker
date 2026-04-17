@@ -11,8 +11,6 @@ import {
 	includeSnapshotSchema,
 	maybeSnapshot,
 	notConnectedError,
-	resolveNodeToObjectId,
-	resolveRefEntry,
 	resolveRefToRemoteObject,
 	tryGetBoxModel,
 	waitForStabilization,
@@ -309,15 +307,15 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 				let x: number;
 				let y: number;
 				if (ref) {
-					const entry = resolveRefEntry(session, ref);
-					const point = await tryGetBoxModel(relay, session, entry.backendDOMNodeId, entry.frameId);
+					const { backendDOMNodeId, frameId } = await resolveRefToRemoteObject(relay, session, ref);
+					const point = await tryGetBoxModel(relay, session, backendDOMNodeId, frameId);
 					({ x, y } = point ?? { x: 0, y: 0 });
 					await sendCdpCommand(
 						relay,
 						session,
 						'Input.dispatchMouseEvent',
 						{ type: 'mouseWheel', x, y, deltaX: delta_x, deltaY: delta_y },
-						{ frameId: entry.frameId },
+						{ frameId },
 					);
 				} else {
 					// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
@@ -340,8 +338,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 
 			// JS scrollBy with actual movement measurement
 			if (ref) {
-				const entry = resolveRefEntry(session, ref);
-				const objectId = await resolveNodeToObjectId(relay, session, entry.backendDOMNodeId, entry.frameId);
+				const { objectId, frameId } = await resolveRefToRemoteObject(relay, session, ref);
 				// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 				const result = (await sendCdpCommand(
 					relay,
@@ -356,7 +353,7 @@ export const registerPageTools = (server: McpServer, relay: RelayConnection, ses
 						objectId,
 						returnByValue: true,
 					},
-					{ frameId: entry.frameId },
+					{ frameId },
 				)) as { result: { value: [number, number] } };
 				return respond(formatScrollMovement(result.result.value));
 			}

@@ -13,6 +13,7 @@ import {
 	includeSnapshotSchema,
 	maybeSnapshot,
 	notConnectedError,
+	refreshRefInPlace,
 	resolveNodeToObjectId,
 	resolveRefEntry,
 	resolveRefToRemoteObject,
@@ -20,30 +21,8 @@ import {
 	waitForStabilization,
 	type TextContent,
 } from './shared.ts';
-import { takeSnapshot } from './state.ts';
 
 // #region element resolution
-
-/**
- * re-queries the AX tree to find an element by role+name when the original node ID is stale.
- * note: takeSnapshot replaces the session ref map as a side effect — this is intentional
- * since the old refs are stale anyway.
- */
-const fallbackResolve = async (
-	relay: RelayConnection,
-	session: SessionState,
-	role: string,
-	name: string,
-	frameId?: string,
-): Promise<{ x: number; y: number; backendDOMNodeId: number } | 'ambiguous' | null> => {
-	await takeSnapshot(relay, session);
-	const matches = session.findByRoleName(role, name, frameId);
-	if (matches.length === 0 || !matches[0].backendDOMNodeId) return null;
-	if (matches.length > 1) return 'ambiguous';
-	const point = await tryGetBoxModel(relay, session, matches[0].backendDOMNodeId, frameId);
-	if (!point) return null;
-	return { ...point, backendDOMNodeId: matches[0].backendDOMNodeId };
-};
 
 /** checks if a point is within the current viewport */
 const isInViewport = async (
@@ -66,8 +45,11 @@ const isInViewport = async (
 };
 
 /**
- * gets the clickable center coordinates of an element, with auto-scroll if off-screen
- * and role+name fallback if the node is stale.
+ * gets the clickable center coordinates of an element, with auto-scroll if off-screen.
+ * if the cached `backendDOMNodeId` is stale (e.g. after a React re-render), the ref is
+ * refreshed in place via the accessibility tree — only the one entry is updated, the
+ * rest of the ref map is preserved.
+ *
  * @returns coordinates and whether auto-scroll was performed
  */
 const resolveRefToPoint = async (
@@ -77,22 +59,23 @@ const resolveRefToPoint = async (
 ): Promise<{ x: number; y: number; scrolled: boolean; frameId?: string }> => {
 	const entry = resolveRefEntry(session, ref);
 	const frameId = entry.frameId;
-	let nodeId = entry.backendDOMNodeId;
 
-	let point = await tryGetBoxModel(relay, session, nodeId, frameId);
-	if (!point) {
-		const fallback = await fallbackResolve(relay, session, entry.role, entry.name, frameId);
-		if (fallback === 'ambiguous') {
+	let resolved: { nodeId: number; point: { x: number; y: number } } | null = null;
+	if (entry.backendDOMNodeId) {
+		const p = await tryGetBoxModel(relay, session, entry.backendDOMNodeId, frameId);
+		if (p) resolved = { nodeId: entry.backendDOMNodeId, point: p };
+	}
+	if (!resolved) {
+		const fresh = await refreshRefInPlace(relay, session, ref);
+		const p = await tryGetBoxModel(relay, session, fresh.backendDOMNodeId, frameId);
+		if (!p) {
 			throw new Error(
-				`Element for ref "${ref}" is stale and multiple candidates match "${entry.role}" "${entry.name}". Run snapshot to get fresh refs.`,
+				`Element for ref "${ref}" was relocated but has no box (likely hidden or detached mid-resolve). Run snapshot() to refresh.`,
 			);
 		}
-		if (!fallback) {
-			throw new Error(`Element for ref "${ref}" is no longer in the DOM. Run snapshot to refresh.`);
-		}
-		point = fallback;
-		nodeId = fallback.backendDOMNodeId;
+		resolved = { nodeId: fresh.backendDOMNodeId, point: p };
 	}
+	const { nodeId, point } = resolved;
 
 	const inView = await isInViewport(relay, session, point.x, point.y);
 	if (!inView) {
@@ -669,16 +652,16 @@ export const registerInteractionTools = (
 		},
 		async ({ ref, path, include_snapshot }) => {
 			if (!session.isConnected) return notConnectedError();
-			const entry = resolveRefEntry(session, ref);
+			const { backendDOMNodeId, frameId } = await resolveRefToRemoteObject(relay, session, ref);
 			await sendCdpCommand(
 				relay,
 				session,
 				'DOM.setFileInputFiles',
 				{
 					files: [path],
-					backendNodeId: entry.backendDOMNodeId,
+					backendNodeId: backendDOMNodeId,
 				},
-				{ frameId: entry.frameId },
+				{ frameId },
 			);
 
 			const content: TextContent[] = [{ type: 'text', text: `Uploaded "${path}" to ${ref}.` }];

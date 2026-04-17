@@ -288,17 +288,13 @@ export class SessionState {
 	}
 
 	/**
-	 * finds ref entries by role and name, scoped to a specific frame.
-	 * returns all matches so callers can enforce uniqueness.
+	 * patches fields on an existing ref entry in place. used by stale-ref recovery
+	 * to swap in a fresh `backendDOMNodeId` without replacing the entire ref map.
 	 */
-	findByRoleName(role: string, name: string, frameId?: string): RefEntry[] {
-		const matches: RefEntry[] = [];
-		for (const entry of this.#refMap.values()) {
-			if (entry.role === role && entry.name === name && entry.frameId === frameId) {
-				matches.push(entry);
-			}
-		}
-		return matches;
+	patchRef(ref: string, patch: Partial<Omit<RefEntry, 'ref'>>): void {
+		const entry = this.#refMap.get(ref);
+		if (!entry) return;
+		Object.assign(entry, patch);
 	}
 
 	// #endregion
