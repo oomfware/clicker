@@ -318,6 +318,10 @@ const setCheckedState = async (
 		const { x, y, frameId: resolvedFrameId } = await resolveRefToPoint(ref, relay, session);
 		await dispatchClick(relay, session, x, y, 1, 'left', resolvedFrameId);
 
+		// re-resolve — React may swap the checkbox node on state change, invalidating the
+		// objectId captured before the click
+		const post = await resolveRefToRemoteObject(relay, session, ref);
+
 		// verify the click actually changed the state
 		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 		const after = (await sendCdpCommand(
@@ -326,10 +330,10 @@ const setCheckedState = async (
 			'Runtime.callFunctionOn',
 			{
 				functionDeclaration: 'function() { return this.checked; }',
-				objectId,
+				objectId: post.objectId,
 				returnByValue: true,
 			},
-			{ frameId },
+			{ frameId: post.frameId },
 		)) as { result: { value: boolean } };
 
 		// if coordinate-based click missed (e.g. hidden checkbox with custom styling), retry via JS
@@ -340,9 +344,9 @@ const setCheckedState = async (
 				'Runtime.callFunctionOn',
 				{
 					functionDeclaration: 'function() { this.click(); }',
-					objectId,
+					objectId: post.objectId,
 				},
-				{ frameId },
+				{ frameId: post.frameId },
 			);
 		}
 	}
@@ -448,7 +452,10 @@ export const registerInteractionTools = (
 			await sendCdpCommand(relay, session, 'Input.insertText', { text: value }, { frameId });
 
 			// Input.insertText already fires input events natively;
-			// dispatch change because browsers only fire it on blur, not programmatic insertion
+			// dispatch change because browsers only fire it on blur, not programmatic insertion.
+			// re-resolve the object — React components commonly swap the input node on every
+			// keystroke, which would invalidate the pre-mutation objectId.
+			const post = await resolveRefToRemoteObject(relay, session, ref);
 			await sendCdpCommand(
 				relay,
 				session,
@@ -457,9 +464,9 @@ export const registerInteractionTools = (
 					functionDeclaration: `function() {
 					this.dispatchEvent(new Event('change', { bubbles: true }));
 				}`,
-					objectId,
+					objectId: post.objectId,
 				},
-				{ frameId },
+				{ frameId: post.frameId },
 			);
 
 			const content: TextContent[] = [{ type: 'text', text: `Filled ${ref} with "${value}".` }];
