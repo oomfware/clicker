@@ -45,10 +45,8 @@ const isInViewport = async (
 };
 
 /**
- * gets the clickable center coordinates of an element, with auto-scroll if off-screen.
- * if the cached `backendDOMNodeId` is stale (e.g. after a React re-render), the ref is
- * refreshed in place via the accessibility tree — only the one entry is updated, the
- * rest of the ref map is preserved.
+ * resolves a ref to viewport-center coordinates, auto-scrolling into view if off-screen
+ * and refreshing stale refs in place.
  *
  * @returns coordinates and whether auto-scroll was performed
  */

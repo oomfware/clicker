@@ -6,7 +6,7 @@ import { sendCdpCommand } from '../cdp.ts';
 import type { RelayConnection } from '../connection.ts';
 import type { RefEntry, SessionState } from '../session.ts';
 
-import { takeSnapshot } from './state.ts';
+import { type CdpAXNode, sanitizeName, takeSnapshot } from './state.ts';
 
 export type TextContent = { type: 'text'; text: string };
 
@@ -62,23 +62,6 @@ export const resolveRefEntry = (session: SessionState, ref: string): RefEntry =>
 	return entry;
 };
 
-/** raw CDP AXNode fields we care about for role/name matching */
-interface AxMatchNode {
-	ignored?: boolean;
-	role?: { value?: unknown };
-	name?: { value?: unknown };
-	backendDOMNodeId?: number;
-}
-
-// oxlint-disable-next-line no-misleading-character-class -- matches the snapshot sanitizer
-const INVISIBLE_CHARS_REFRESH = /[\uFEFF\u200B\u200C\u200D\u2060\u00A0]/g;
-
-const axString = (value: unknown): string => {
-	if (typeof value === 'string') return value.replace(INVISIBLE_CHARS_REFRESH, '');
-	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-	return '';
-};
-
 /**
  * re-locates a stale ref by re-querying `Accessibility.getFullAXTree` in the ref's frame
  * and finding the `nth` node whose role+name match the stored entry. updates just that
@@ -96,12 +79,12 @@ export const refreshRefInPlace = async (
 	const { role, name, frameId } = entry;
 	const nthTarget = entry.nth ?? 0;
 
-	let tree: { nodes: AxMatchNode[] };
+	let tree: { nodes: CdpAXNode[] };
 	try {
 		// oxlint-disable-next-line no-unsafe-type-assertion -- CDP response shape
 		tree = (await sendCdpCommand(relay, session, 'Accessibility.getFullAXTree', frameId ? { frameId } : {}, {
 			frameId,
-		})) as { nodes: AxMatchNode[] };
+		})) as { nodes: CdpAXNode[] };
 	} catch (err) {
 		throw new Error(
 			`Ref "${ref}" could not be refreshed (frame may have navigated or detached). Run snapshot() to get fresh refs.`,
@@ -112,19 +95,18 @@ export const refreshRefInPlace = async (
 	let matched = 0;
 	for (const node of tree.nodes) {
 		if (node.ignored) continue;
-		if (axString(node.role?.value) !== role) continue;
-		if (axString(node.name?.value) !== name) continue;
+		if (node.role.value !== role) continue;
+		if (sanitizeName(node.name?.value ?? '') !== name) continue;
 		if (matched === nthTarget) {
 			if (node.backendDOMNodeId == null) break;
-			session.patchRef(ref, { backendDOMNodeId: node.backendDOMNodeId });
-			// oxlint-disable-next-line no-unsafe-type-assertion -- narrowed by backendDOMNodeId guard above
-			return session.resolveRef(ref) as RefEntry & { backendDOMNodeId: number };
+			session.setRefBackendNodeId(ref, node.backendDOMNodeId);
+			return { ...entry, backendDOMNodeId: node.backendDOMNodeId };
 		}
 		matched++;
 	}
 
 	throw new Error(
-		`Ref "${ref}" is no longer in the DOM (role=${JSON.stringify(role)}, name=${JSON.stringify(name)}). Run snapshot() to refresh.`,
+		`Ref "${ref}" is no longer in the DOM (role=${role}, name=${JSON.stringify(name)}). Run snapshot() to refresh.`,
 	);
 };
 

@@ -10,13 +10,14 @@ import { notConnectedError, resolveRefToRemoteObject } from './shared.ts';
 // #region accessibility tree types
 
 /** raw CDP AXNode — flat list with childIds references, not embedded children */
-interface CdpAXNode {
+export interface CdpAXNode {
 	nodeId: string;
 	role: { value: string };
 	name?: { value: string };
 	childIds?: string[];
 	properties?: { name: string; value: { value: unknown } }[];
 	backendDOMNodeId?: number;
+	ignored?: boolean;
 }
 
 /** tree node with resolved children for recursive traversal */
@@ -114,7 +115,7 @@ const nodeKey = (frameId: string | undefined, backendNodeId: number): string =>
 const INVISIBLE_CHARS = /[\uFEFF\u200B\u200C\u200D\u2060\u00A0]/g;
 
 /** strips invisible/zero-width characters from display names */
-const sanitizeName = (name: string): string => name.replace(INVISIBLE_CHARS, '');
+export const sanitizeName = (name: string): string => name.replace(INVISIBLE_CHARS, '');
 
 // #endregion
 

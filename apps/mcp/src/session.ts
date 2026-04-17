@@ -288,13 +288,13 @@ export class SessionState {
 	}
 
 	/**
-	 * patches fields on an existing ref entry in place. used by stale-ref recovery
-	 * to swap in a fresh `backendDOMNodeId` without replacing the entire ref map.
+	 * updates the cached backend node id for an existing ref. used by stale-ref recovery
+	 * so a fresh node id can replace the stale one without rebuilding the ref map.
 	 */
-	patchRef(ref: string, patch: Partial<Omit<RefEntry, 'ref'>>): void {
+	setRefBackendNodeId(ref: string, backendDOMNodeId: number): void {
 		const entry = this.#refMap.get(ref);
 		if (!entry) return;
-		Object.assign(entry, patch);
+		entry.backendDOMNodeId = backendDOMNodeId;
 	}
 
 	// #endregion
