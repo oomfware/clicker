@@ -232,7 +232,17 @@ interface SnapshotContext {
 	cursorMap?: Map<string, CursorInteractiveInfo>;
 	scrollMap?: Map<string, ScrollContainerInfo>;
 	frameId?: string;
+	/** counter for `nth` assignment, keyed by `frameId:role:name` across the full traversal */
+	nthCounts: Map<string, number>;
 }
+
+/** returns the zero-based index for this ref's `(frameId, role, name)` and increments the counter */
+const nextNth = (ctx: SnapshotContext, role: string, name: string): number => {
+	const key = `${ctx.frameId ?? ''}:${role}:${name}`;
+	const current = ctx.nthCounts.get(key) ?? 0;
+	ctx.nthCounts.set(key, current + 1);
+	return current;
+};
 
 /** builds an indented text tree matching agent-browser's format */
 const buildSnapshotTree = (nodes: AXNode[], ctx: SnapshotContext, depth = 0): string => {
@@ -262,6 +272,7 @@ const buildSnapshotTree = (nodes: AXNode[], ctx: SnapshotContext, depth = 0): st
 				name,
 				backendDOMNodeId: node.backendDOMNodeId,
 				frameId: ctx.frameId,
+				nth: nextNth(ctx, 'Iframe', name),
 			});
 			const iframe = node.backendDOMNodeId != null ? ctx.iframeData?.get(node.backendDOMNodeId) : undefined;
 			lines.push(`${indent}- iframe${name ? ` ${JSON.stringify(name)}` : ''} [ref=${ref}]`);
@@ -339,7 +350,14 @@ const buildSnapshotTree = (nodes: AXNode[], ctx: SnapshotContext, depth = 0): st
 			isInteractive || (!ctx.options.interactiveOnly && isContent && name) || !!cursorInfo || !!scrollInfo;
 		if (shouldRef) {
 			const ref = `e${ctx.refMap.length + 1}`;
-			ctx.refMap.push({ ref, role, name, backendDOMNodeId: node.backendDOMNodeId, frameId: ctx.frameId });
+			ctx.refMap.push({
+				ref,
+				role,
+				name,
+				backendDOMNodeId: node.backendDOMNodeId,
+				frameId: ctx.frameId,
+				nth: nextNth(ctx, role, name),
+			});
 			attrs.push(`ref=${ref}`);
 		}
 
@@ -809,7 +827,14 @@ export const takeSnapshot = async (
 	const scrollMap = mergeSettledMaps(scrollResults);
 
 	const refMap: RefEntry[] = [];
-	const ctx: SnapshotContext = { refMap, options, iframeData, cursorMap, scrollMap };
+	const ctx: SnapshotContext = {
+		refMap,
+		options,
+		iframeData,
+		cursorMap,
+		scrollMap,
+		nthCounts: new Map(),
+	};
 	const tree = buildSnapshotTree(roots, ctx);
 	session.setRefMap(refMap);
 	if (tree) return tree;

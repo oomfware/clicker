@@ -4,6 +4,13 @@ export interface RefEntry {
 	name: string;
 	backendDOMNodeId?: number;
 	frameId?: string;
+	/**
+	 * zero-based index among siblings matching this `(frameId, role, name)` tuple
+	 * in the snapshot that produced this entry. used as a disambiguator when the
+	 * cached `backendDOMNodeId` is stale and we need to re-locate the element via
+	 * the accessibility tree.
+	 */
+	nth?: number;
 }
 
 export interface ConsoleMessage {
